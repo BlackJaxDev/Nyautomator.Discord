@@ -1,0 +1,36 @@
+{
+  "$schema": "nyautomator.template.v1",
+  "id": "scheduled-and-timer-based-social-plug-rotation",
+  "kind": "automation-workflow",
+  "title": "Social plug rotation",
+  "group": "Scheduled And Timer-Based",
+  "summary": "interval timer -> cycle through Discord/socials messages -> chat post.",
+  "description": "Social plug rotation: interval timer -> cycle through Discord/socials messages -> chat post.",
+  "rootOnly": true,
+  "generatedFrom": "docs/template-ideas.md",
+  "triggers": [
+    {
+      "id": "trigger-1",
+      "actionType": "Event.Timer.Interval",
+      "actionConfig": {
+        "IntervalMs": 600000,
+        "TimerId": "social-plug-rotation"
+      },
+      "actionName": "Social plug rotation Timer"
+    }
+  ],
+  "messageTemplate": "{{TimerId}} tick {{TickCount}} at {{UtcTimestamp}}.",
+  "constants": [
+    {
+      "key": "discordChannelId",
+      "name": "Discord Channel ID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "steps": [
+    "twitch-chat",
+    "discord-message",
+    "log"
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "$schema": "nyautomator.template.v1",
+  "id": "multi-platform-output-go-live-cross-promo",
+  "kind": "automation-workflow",
+  "title": "Go-live cross-promo",
+  "group": "Multi-Platform Output",
+  "summary": "stream online -> Discord \"now live\" message with link -> Twitch chat announcement -> log.",
+  "description": "Go-live cross-promo: stream online -> Discord \"now live\" message with link -> Twitch chat announcement -> log.",
+  "rootOnly": true,
+  "generatedFrom": "docs/template-ideas.md",
+  "triggers": [
+    {
+      "id": "trigger-1",
+      "actionType": "Twitch.EventSub.stream.online.1",
+      "actionConfig": {},
+      "actionName": "Stream Online"
+    }
+  ],
+  "messageTemplate": "Stream is online. Starting production workflow.",
+  "constants": [
+    {
+      "key": "mediaPath",
+      "name": "Alert Media Path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "audioPath",
+      "name": "Alert Audio Path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "durationSeconds",
+      "name": "Alert Duration Seconds",
+      "value": 6,
+      "type": "float64"
+    },
+    {
+      "key": "playTextToSpeech",
+      "name": "Play Text To Speech",
+      "value": false,
+      "type": "boolean"
+    },
+    {
+      "key": "discordChannelId",
+      "name": "Discord Channel ID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "steps": [
+    "alert",
+    "twitch-chat",
+    "youtube-chat",
+    "discord-message",
+    "log"
+  ]
+}

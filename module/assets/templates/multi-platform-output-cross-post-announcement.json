@@ -1,0 +1,62 @@
+{
+  "$schema": "nyautomator.template.v1",
+  "id": "multi-platform-output-cross-post-announcement",
+  "kind": "automation-workflow",
+  "title": "Cross-post announcement",
+  "group": "Multi-Platform Output",
+  "summary": "dashboard button or command -> format text -> Twitch chat + YouTube chat + Discord message in one sequence.",
+  "description": "Cross-post announcement: dashboard button or command -> format text -> Twitch chat + YouTube chat + Discord message in one sequence.",
+  "rootOnly": true,
+  "generatedFrom": "docs/template-ideas.md",
+  "triggers": [
+    {
+      "id": "trigger-1",
+      "actionType": "Chat.Command",
+      "actionConfig": {
+        "Command": "crosspostannouncement",
+        "CaseSensitive": false
+      },
+      "actionName": "Chat Command !crosspostannouncement"
+    }
+  ],
+  "messageTemplate": "{{ChatterUserName}} ran !{{CommandName}}: {{Arguments}}",
+  "constants": [
+    {
+      "key": "mediaPath",
+      "name": "Alert Media Path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "audioPath",
+      "name": "Alert Audio Path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "durationSeconds",
+      "name": "Alert Duration Seconds",
+      "value": 6,
+      "type": "float64"
+    },
+    {
+      "key": "playTextToSpeech",
+      "name": "Play Text To Speech",
+      "value": false,
+      "type": "boolean"
+    },
+    {
+      "key": "discordChannelId",
+      "name": "Discord Channel ID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "steps": [
+    "alert",
+    "twitch-chat",
+    "youtube-chat",
+    "discord-message",
+    "log"
+  ]
+}

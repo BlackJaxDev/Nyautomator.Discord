@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Nyautomator.Automation.Discord/Nyautomator.Automation.Discord.csproj" />
+    <Project Path="src/Nyautomator.Discord/Nyautomator.Discord.csproj" />
+    <Project Path="src/Nyautomator.Module.Discord/Nyautomator.Module.Discord.csproj" />
+  </Folder>
+</Solution>

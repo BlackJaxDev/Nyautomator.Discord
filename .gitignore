@@ -1,0 +1,6 @@
+/artifacts/
+/build/
+/intermediate/
+**/bin/
+**/obj/
+*.user

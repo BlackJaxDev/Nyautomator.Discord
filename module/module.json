@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "id": "discord",
+  "displayName": "Discord",
+  "description": "Discord OAuth, server directory, bot messages, reactions, and automation nodes.",
+  "version": "0.1.0",
+  "minHostVersion": "0.0.0",
+  "entryAssembly": "Nyautomator.Module.Discord.dll",
+  "entryType": "Nyautomator.Modules.Discord.DiscordModule",
+  "capabilities": [
+    "automation.nodes",
+    "authenticated.request",
+    "dashboard.cards",
+    "settings.cards",
+    "graph.templates",
+    "icons"
+  ],
+  "assetsRoot": "assets",
+  "contributions": {
+    "icons": [
+      {
+        "id": "discord",
+        "path": "icons/discord.svg"
+      }
+    ],
+    "dashboardCards": [
+      {
+        "id": "status",
+        "title": "Discord",
+        "icon": "discord",
+        "renderer": "status-card",
+        "statusSource": "/modules/discord/api/status",
+        "actions": [
+          { "id": "refresh", "label": "Refresh", "method": "GET", "path": "/modules/discord/api/status" },
+          { "id": "authorize", "label": "Connect", "method": "POST", "path": "/modules/discord/api/authorize" },
+          { "id": "disconnect", "label": "Disconnect", "method": "DELETE", "path": "/modules/discord/api/token" }
+        ],
+        "order": 440
+      }
+    ],
+    "settingsCards": [
+      {
+        "id": "settings",
+        "title": "Discord",
+        "icon": "discord",
+        "renderer": "asset-frame",
+        "statusSource": "/modules/discord/api/status",
+        "assetPath": "settings/settings.html",
+        "order": 440
+      }
+    ],
+    "graphTemplates": [
+      {
+        "id": "multi-platform-output-cross-post-announcement",
+        "label": "Cross-Post Announcement",
+        "description": "Dashboard button or command to Twitch chat, YouTube chat, and a Discord message.",
+        "category": "Discord",
+        "path": "templates/multi-platform-output-cross-post-announcement.json",
+        "requiredModuleIds": [ "discord" ],
+        "order": 440
+      },
+      {
+        "id": "multi-platform-output-go-live-cross-promo",
+        "label": "Go-Live Cross Promo",
+        "description": "Stream online event posts a Discord now-live message.",
+        "category": "Discord",
+        "path": "templates/multi-platform-output-go-live-cross-promo.json",
+        "requiredModuleIds": [ "discord" ],
+        "order": 441
+      },
+      {
+        "id": "multi-platform-output-mirror-clips-to-discord",
+        "label": "Mirror Clips To Discord",
+        "description": "Clip events post clip links into a Discord channel.",
+        "category": "Discord",
+        "path": "templates/multi-platform-output-mirror-clips-to-discord.json",
+        "requiredModuleIds": [ "discord" ],
+        "order": 442
+      },
+      {
+        "id": "webhooks-and-http-integrations-discord-webhook-log",
+        "label": "Discord Webhook Log",
+        "description": "Moderation or event data is posted to Discord webhook-style logging.",
+        "category": "Discord",
+        "path": "templates/webhooks-and-http-integrations-discord-webhook-log.json",
+        "requiredModuleIds": [ "discord" ],
+        "order": 443
+      }
+    ],
+    "authenticatedIntegrations": [
+      {
+        "id": "Discord",
+        "displayName": "Discord",
+        "basePath": "https://discord.com/api/v10"
+      }
+    ],
+    "automationAssemblies": [
+      {
+        "id": "nodes",
+        "path": "Nyautomator.Automation.Discord.dll"
+      }
+    ]
+  }
+}

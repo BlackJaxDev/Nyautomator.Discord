@@ -1,0 +1,41 @@
+{
+  "$schema": "nyautomator.template.v1",
+  "id": "webhooks-and-http-integrations-discord-webhook-log",
+  "kind": "automation-workflow",
+  "title": "Discord webhook log",
+  "group": "Webhooks And HTTP Integrations",
+  "summary": "moderation/event -> HTTP POST to Discord webhook URL with embed-style fields.",
+  "description": "Discord webhook log: moderation/event -> HTTP POST to Discord webhook URL with embed-style fields.",
+  "rootOnly": true,
+  "generatedFrom": "docs/template-ideas.md",
+  "triggers": [
+    {
+      "id": "trigger-1",
+      "actionType": "Manual.DashboardButton",
+      "actionConfig": {
+        "ButtonText": "Discord webhook log"
+      },
+      "actionName": "Discord webhook log Button"
+    }
+  ],
+  "messageTemplate": "Discord webhook log triggered.",
+  "constants": [
+    {
+      "key": "url",
+      "name": "URL",
+      "value": "https://example.com/webhook",
+      "type": "string"
+    },
+    {
+      "key": "discordChannelId",
+      "name": "Discord Channel ID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "steps": [
+    "discord-message",
+    "http-post",
+    "log"
+  ]
+}

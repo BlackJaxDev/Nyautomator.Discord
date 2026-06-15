@@ -1,0 +1,43 @@
+{
+  "$schema": "nyautomator.template.v1",
+  "id": "multi-platform-output-mirror-clips-to-discord",
+  "kind": "automation-workflow",
+  "title": "Mirror clips to Discord",
+  "group": "Multi-Platform Output",
+  "summary": "clip created (HTTP/API) -> post clip URL to Discord channel -> chat confirmation.",
+  "description": "Mirror clips to Discord: clip created (HTTP/API) -> post clip URL to Discord channel -> chat confirmation.",
+  "rootOnly": true,
+  "generatedFrom": "docs/template-ideas.md",
+  "triggers": [
+    {
+      "id": "trigger-1",
+      "actionType": "Manual.DashboardButton",
+      "actionConfig": {
+        "ButtonText": "Mirror clips to Discord"
+      },
+      "actionName": "Mirror clips to Discord Button"
+    }
+  ],
+  "messageTemplate": "Mirror clips to Discord triggered.",
+  "constants": [
+    {
+      "key": "url",
+      "name": "URL",
+      "value": "https://example.com/webhook",
+      "type": "string"
+    },
+    {
+      "key": "discordChannelId",
+      "name": "Discord Channel ID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "steps": [
+    "twitch-chat",
+    "youtube-chat",
+    "discord-message",
+    "http-post",
+    "log"
+  ]
+}

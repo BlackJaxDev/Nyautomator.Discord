@@ -1,0 +1,59 @@
+{
+  "$schema": "nyautomator.template.v1",
+  "id": "multi-platform-output-multi-platform-raid-welcome",
+  "kind": "automation-workflow",
+  "title": "Multi-platform raid welcome",
+  "group": "Multi-Platform Output",
+  "summary": "raid -> Twitch chat welcome -> Discord mods ping with raider count and source.",
+  "description": "Multi-platform raid welcome: raid -> Twitch chat welcome -> Discord mods ping with raider count and source.",
+  "rootOnly": true,
+  "generatedFrom": "docs/template-ideas.md",
+  "triggers": [
+    {
+      "id": "trigger-1",
+      "actionType": "Twitch.EventSub.channel.raid.1",
+      "actionConfig": {},
+      "actionName": "Twitch Raid"
+    }
+  ],
+  "messageTemplate": "{{FromBroadcasterUserName}} raided with {{Viewers}} viewers.",
+  "constants": [
+    {
+      "key": "mediaPath",
+      "name": "Alert Media Path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "audioPath",
+      "name": "Alert Audio Path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "durationSeconds",
+      "name": "Alert Duration Seconds",
+      "value": 6,
+      "type": "float64"
+    },
+    {
+      "key": "playTextToSpeech",
+      "name": "Play Text To Speech",
+      "value": false,
+      "type": "boolean"
+    },
+    {
+      "key": "discordChannelId",
+      "name": "Discord Channel ID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "steps": [
+    "alert",
+    "twitch-chat",
+    "youtube-chat",
+    "discord-message",
+    "log"
+  ]
+}

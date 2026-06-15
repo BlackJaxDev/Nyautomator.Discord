@@ -1,0 +1,59 @@
+{
+  "$schema": "nyautomator.template.v1",
+  "id": "multi-platform-output-unified-follow-sub-feed",
+  "kind": "automation-workflow",
+  "title": "Unified follow/sub feed",
+  "group": "Multi-Platform Output",
+  "summary": "Twitch + StreamElements events -> shared formatter subgraph -> alert widget + Discord channel post.",
+  "description": "Unified follow/sub feed: Twitch + StreamElements events -> shared formatter subgraph -> alert widget + Discord channel post.",
+  "rootOnly": true,
+  "generatedFrom": "docs/template-ideas.md",
+  "triggers": [
+    {
+      "id": "trigger-1",
+      "actionType": "Twitch.EventSub.channel.subscribe.1",
+      "actionConfig": {},
+      "actionName": "Twitch Subscription"
+    }
+  ],
+  "messageTemplate": "{{UserName}} subscribed at tier {{Tier}}.",
+  "constants": [
+    {
+      "key": "mediaPath",
+      "name": "Alert Media Path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "audioPath",
+      "name": "Alert Audio Path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "durationSeconds",
+      "name": "Alert Duration Seconds",
+      "value": 6,
+      "type": "float64"
+    },
+    {
+      "key": "playTextToSpeech",
+      "name": "Play Text To Speech",
+      "value": false,
+      "type": "boolean"
+    },
+    {
+      "key": "discordChannelId",
+      "name": "Discord Channel ID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "steps": [
+    "alert",
+    "youtube-chat",
+    "discord-message",
+    "stream-elements-alert",
+    "log"
+  ]
+}

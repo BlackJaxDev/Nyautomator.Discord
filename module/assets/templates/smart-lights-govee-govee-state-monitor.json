@@ -1,0 +1,64 @@
+{
+  "$schema": "nyautomator.template.v1",
+  "id": "smart-lights-govee-govee-state-monitor",
+  "kind": "automation-workflow",
+  "title": "Govee state monitor",
+  "group": "Smart Lights (Govee)",
+  "summary": "Govee.Device.Event (offline/online) -> branch -> dashboard log + optional Discord alert.",
+  "description": "Govee state monitor: Govee.Device.Event (offline/online) -> branch -> dashboard log + optional Discord alert.",
+  "rootOnly": true,
+  "generatedFrom": "docs/template-ideas.md",
+  "triggers": [
+    {
+      "id": "trigger-1",
+      "actionType": "Govee.Device.Event",
+      "actionConfig": {},
+      "actionName": "Govee Device Event"
+    }
+  ],
+  "messageTemplate": "Govee device event: {{DeviceName}} {{EventName}}.",
+  "constants": [
+    {
+      "key": "mediaPath",
+      "name": "Alert Media Path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "audioPath",
+      "name": "Alert Audio Path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "durationSeconds",
+      "name": "Alert Duration Seconds",
+      "value": 6,
+      "type": "float64"
+    },
+    {
+      "key": "playTextToSpeech",
+      "name": "Play Text To Speech",
+      "value": false,
+      "type": "boolean"
+    },
+    {
+      "key": "discordChannelId",
+      "name": "Discord Channel ID",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "colorHex",
+      "name": "Govee Color Hex",
+      "value": "#44ccff",
+      "type": "string"
+    }
+  ],
+  "steps": [
+    "alert",
+    "discord-message",
+    "govee-color",
+    "log"
+  ]
+}

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Discord</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, Segoe UI, system-ui, sans-serif; background: #11131a; color: #eef1f7; }
+    body { margin: 0; padding: 18px; }
+    main { display: grid; gap: 14px; max-width: 920px; }
+    section { border: 1px solid #2b3040; border-radius: 8px; padding: 14px; background: #171a23; }
+    h1, h2 { margin: 0 0 10px; font-size: 18px; }
+    h2 { font-size: 15px; }
+    label { display: grid; gap: 5px; margin: 10px 0; color: #b8c0d4; font-size: 12px; }
+    input, textarea, select { background: #0f1219; color: #eef1f7; border: 1px solid #343a4d; border-radius: 6px; padding: 8px 10px; font: inherit; }
+    textarea { min-height: 74px; resize: vertical; }
+    button { border: 0; border-radius: 6px; padding: 8px 11px; background: #5865f2; color: white; font-weight: 650; cursor: pointer; }
+    button.secondary { background: #2d3346; }
+    button.danger { background: #b84343; }
+    button:disabled { opacity: .6; cursor: default; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+    .muted { color: #9aa4ba; font-size: 12px; }
+    .status { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .pill { border-radius: 999px; padding: 4px 8px; background: #252b3c; font-size: 12px; }
+    .ok { background: #1e6f4a; }
+    .warn { background: #745c22; }
+    .error { color: #ff9d9d; }
+    .success { color: #9dffc6; }
+  </style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>Discord</h1>
+    <div class="status" id="status"></div>
+    <div class="row">
+      <button id="authorize">Connect</button>
+      <button id="disconnect" class="danger">Disconnect</button>
+      <button id="refresh" class="secondary">Refresh</button>
+    </div>
+    <p id="message" class="muted"></p>
+  </section>
+
+  <section>
+    <h2>Module Config</h2>
+    <div class="grid">
+      <label>Client ID <input id="clientId" autocomplete="off"></label>
+      <label>Client Secret <input id="clientSecret" type="password" autocomplete="off"></label>
+      <label>Redirect URI <input id="redirectUri" autocomplete="off"></label>
+      <label>Guild ID <input id="guildId" autocomplete="off"></label>
+      <label>Bot Token <input id="botToken" type="password" autocomplete="off"></label>
+      <label>Auth Browser Path <input id="authBrowserPath" autocomplete="off" placeholder="Optional"></label>
+    </div>
+    <label>Scopes <textarea id="scopes" spellcheck="false"></textarea></label>
+    <div class="row">
+      <button id="save">Save</button>
+      <button id="autoScopes" class="secondary">Auto Scopes</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Directory</h2>
+    <div class="row">
+      <button id="loadGuilds" class="secondary">Load Servers</button>
+      <button id="loadChannels" class="secondary">Load Channels</button>
+    </div>
+    <label>Servers <select id="guilds"></select></label>
+    <label>Channels <select id="channels"></select></label>
+    <p id="directoryMessage" class="muted"></p>
+  </section>
+</main>
+
+<script>
+const api = path => `/modules/discord/api/${path}`;
+const configUrl = '/modules/discord/config';
+const fields = ['clientId', 'clientSecret', 'redirectUri', 'guildId', 'botToken', 'authBrowserPath'];
+let config = {};
+
+function setMessage(text, cls = 'muted') {
+  const el = document.getElementById('message');
+  el.className = cls;
+  el.textContent = text || '';
+}
+
+function scopesFromText(value) {
+  return (value || '').split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+}
+
+function renderConfig() {
+  for (const field of fields) document.getElementById(field).value = config[field] || '';
+  document.getElementById('scopes').value = Array.isArray(config.scopes) ? config.scopes.join('\n') : '';
+}
+
+async function loadConfig() {
+  const res = await fetch(configUrl, { cache: 'no-store' });
+  config = res.ok ? await res.json() : {};
+  renderConfig();
+}
+
+async function saveConfig() {
+  for (const field of fields) config[field] = document.getElementById(field).value.trim();
+  config.scopes = scopesFromText(document.getElementById('scopes').value);
+  const res = await fetch(configUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  });
+  setMessage(res.ok ? 'Saved Discord module config.' : 'Failed to save Discord module config.', res.ok ? 'success' : 'error');
+  await loadStatus();
+}
+
+async function loadStatus() {
+  const res = await fetch(api('status'), { cache: 'no-store' });
+  const data = res.ok ? await res.json() : null;
+  const status = document.getElementById('status');
+  status.innerHTML = '';
+  const connected = data && data.connected;
+  status.append(pill(connected ? 'Connected' : 'Disconnected', connected ? 'ok' : 'warn'));
+  if (data?.account?.displayName) status.append(pill(data.account.displayName));
+  if (Array.isArray(data?.scopes) && data.scopes.length) status.append(pill(data.scopes.join(', ')));
+}
+
+function pill(text, cls = '') {
+  const el = document.createElement('span');
+  el.className = `pill ${cls}`.trim();
+  el.textContent = text;
+  return el;
+}
+
+async function authorize() {
+  setMessage('Waiting for Discord authorization...');
+  const res = await fetch(api('authorize'), { method: 'POST' });
+  const data = res.ok ? await res.json() : {};
+  setMessage(data.success ? 'Discord connected.' : (data.message || 'Discord authorization failed.'), data.success ? 'success' : 'error');
+  await loadStatus();
+  await loadGuilds(true);
+}
+
+async function disconnect() {
+  const res = await fetch(api('token'), { method: 'DELETE' });
+  setMessage(res.ok ? 'Discord disconnected.' : 'Failed to disconnect Discord.', res.ok ? 'success' : 'error');
+  await loadStatus();
+}
+
+async function autoScopes() {
+  const res = await fetch(api('scopes/auto'), { cache: 'no-store' });
+  const data = res.ok ? await res.json() : {};
+  const merged = new Set([...(config.scopes || []), ...(data.scopes || [])]);
+  config.scopes = [...merged].sort((a, b) => a.localeCompare(b));
+  renderConfig();
+}
+
+async function loadGuilds(refresh = false) {
+  const res = await fetch(api(`guilds${refresh ? '?refresh=true' : ''}`), { cache: 'no-store' });
+  const data = res.ok ? await res.json() : {};
+  const select = document.getElementById('guilds');
+  select.innerHTML = '';
+  for (const guild of data.guilds || []) {
+    const option = document.createElement('option');
+    option.value = guild.id;
+    option.textContent = guild.botInstalled ? guild.name : `${guild.name} (bot missing)`;
+    select.append(option);
+  }
+  if (config.guildId) select.value = config.guildId;
+  document.getElementById('directoryMessage').textContent = data.message || '';
+}
+
+async function loadChannels() {
+  const guildId = document.getElementById('guilds').value || config.guildId || '';
+  const res = await fetch(api(`channels?guildId=${encodeURIComponent(guildId)}&refresh=true`), { cache: 'no-store' });
+  const data = res.ok ? await res.json() : {};
+  const select = document.getElementById('channels');
+  select.innerHTML = '';
+  for (const channel of data.channels || []) {
+    const option = document.createElement('option');
+    option.value = channel.id;
+    option.textContent = channel.displayName || channel.name || channel.id;
+    select.append(option);
+  }
+  document.getElementById('directoryMessage').textContent = data.message || '';
+}
+
+document.getElementById('save').addEventListener('click', saveConfig);
+document.getElementById('authorize').addEventListener('click', authorize);
+document.getElementById('disconnect').addEventListener('click', disconnect);
+document.getElementById('refresh').addEventListener('click', loadStatus);
+document.getElementById('autoScopes').addEventListener('click', autoScopes);
+document.getElementById('loadGuilds').addEventListener('click', () => loadGuilds(true));
+document.getElementById('loadChannels').addEventListener('click', loadChannels);
+document.getElementById('guilds').addEventListener('change', event => { config.guildId = event.target.value; document.getElementById('guildId').value = config.guildId; });
+
+loadConfig().then(loadStatus).then(() => loadGuilds(false)).catch(err => setMessage(err.message, 'error'));
+</script>
+</body>
+</html>
