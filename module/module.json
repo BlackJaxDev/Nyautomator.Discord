@@ -28,13 +28,9 @@
         "id": "status",
         "title": "Discord",
         "icon": "discord",
-        "renderer": "status-card",
+        "renderer": "asset-frame",
         "statusSource": "/modules/discord/api/status",
-        "actions": [
-          { "id": "refresh", "label": "Refresh", "method": "GET", "path": "/modules/discord/api/status" },
-          { "id": "authorize", "label": "Connect", "method": "POST", "path": "/modules/discord/api/authorize" },
-          { "id": "disconnect", "label": "Disconnect", "method": "DELETE", "path": "/modules/discord/api/token" }
-        ],
+        "assetPath": "dashboard/dashboard.html",
         "order": 440
       }
     ],
@@ -46,6 +42,9 @@
         "renderer": "asset-frame",
         "statusSource": "/modules/discord/api/status",
         "assetPath": "settings/settings.html",
+        "metadata": {
+          "saveOnHostSave": true
+        },
         "order": 440
       }
     ],

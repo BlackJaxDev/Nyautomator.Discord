@@ -5,192 +5,1437 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Discord</title>
   <style>
-    :root { color-scheme: dark; font-family: Inter, Segoe UI, system-ui, sans-serif; background: #11131a; color: #eef1f7; }
-    body { margin: 0; padding: 18px; }
-    main { display: grid; gap: 14px; max-width: 920px; }
-    section { border: 1px solid #2b3040; border-radius: 8px; padding: 14px; background: #171a23; }
-    h1, h2 { margin: 0 0 10px; font-size: 18px; }
-    h2 { font-size: 15px; }
-    label { display: grid; gap: 5px; margin: 10px 0; color: #b8c0d4; font-size: 12px; }
-    input, textarea, select { background: #0f1219; color: #eef1f7; border: 1px solid #343a4d; border-radius: 6px; padding: 8px 10px; font: inherit; }
-    textarea { min-height: 74px; resize: vertical; }
-    button { border: 0; border-radius: 6px; padding: 8px 11px; background: #5865f2; color: white; font-weight: 650; cursor: pointer; }
-    button.secondary { background: #2d3346; }
-    button.danger { background: #b84343; }
-    button:disabled { opacity: .6; cursor: default; }
-    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
-    .muted { color: #9aa4ba; font-size: 12px; }
-    .status { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .pill { border-radius: 999px; padding: 4px 8px; background: #252b3c; font-size: 12px; }
-    .ok { background: #1e6f4a; }
-    .warn { background: #745c22; }
-    .error { color: #ff9d9d; }
-    .success { color: #9dffc6; }
+    :root {
+      color-scheme: dark;
+      --page-bg: #0b0e13;
+      --text: #e5e7eb;
+      --subtext: #a3aab8;
+      --surface: #121417;
+      --border: #2a2e37;
+      --button-bg: #0f1115;
+      --accent: #38bdf8;
+      --accent-weak: #93c5fd;
+      --danger: #7f1d1d;
+      --danger-border: #991b1b;
+      --bg-secondary: #1a1d24;
+      --success: #22c55e;
+      font-family: Inter, "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background: transparent;
+    }
+
+    [data-theme='light'] {
+      color-scheme: light;
+      --page-bg: #f7fafc;
+      --text: #0f172a;
+      --subtext: #475569;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --button-bg: #f3f4f6;
+      --accent: #0ea5e9;
+      --accent-weak: #2563eb;
+      --danger: #fee2e2;
+      --danger-border: #ef4444;
+      --bg-secondary: #f1f5f9;
+      --success: #16a34a;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      min-width: 320px;
+      background: transparent;
+      color: var(--text);
+    }
+
+    body {
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: color-mix(in oklab, var(--button-bg), var(--accent) 12%);
+      border: 1px solid color-mix(in oklab, var(--border), var(--accent) 26%);
+      color: var(--accent);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .settings-grid {
+      gap: 14px;
+      max-width: 820px;
+    }
+
+    .settings-helper {
+      grid-column: 1 / -1;
+      margin: 0 0 4px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid color-mix(in oklab, var(--border), var(--accent) 18%);
+      background: color-mix(in oklab, var(--bg-secondary), rgba(56,189,248,0.12) 18%);
+      line-height: 1.5;
+      color: var(--subtext);
+      font-size: 0.9rem;
+    }
+
+    .settings-label {
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--subtext);
+      font-weight: 600;
+    }
+
+    .input, .select {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background-color: var(--button-bg);
+      color: var(--text);
+      font: inherit;
+      -webkit-app-region: no-drag;
+    }
+
+    textarea.input {
+      min-height: 38px;
+      resize: vertical;
+    }
+
+    .select option {
+      background-color: var(--surface);
+      color: var(--text);
+    }
+
+    .input:focus, .select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .btn {
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      font-size: 0.95rem;
+      background-color: var(--button-bg);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.05s ease, box-shadow 0.2s ease;
+      -webkit-app-region: no-drag;
+    }
+
+    .btn:hover:not(:disabled) {
+      border-color: var(--accent);
+    }
+
+    .btn:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.58;
+    }
+
+    .btn.outline {
+      background: transparent;
+    }
+
+    .btn.danger.outline {
+      background: transparent;
+      border-color: var(--danger-border);
+      color: #fecaca;
+    }
+
+    [data-theme='light'] .btn.danger.outline {
+      color: #991b1b;
+    }
+
+    .settings-inline-fields {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .settings-inline-fields .input {
+      flex: 1 1 auto;
+    }
+
+    .settings-inline-fields .btn {
+      flex: 0 0 auto;
+    }
+
+    .settings-inline-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .settings-inline-note {
+      grid-column: 1 / -1;
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--subtext);
+    }
+
+    .settings-inline-note.success {
+      color: color-mix(in oklab, var(--accent), var(--text) 45%);
+    }
+
+    .settings-inline-note.error {
+      color: color-mix(in oklab, var(--danger-border), var(--text) 45%);
+    }
+
+    .settings-field-group {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .settings-browser-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .settings-browser-row .input {
+      flex: 1 1 220px;
+      min-width: 200px;
+      min-height: 38px;
+    }
+
+    .settings-browser-row .input[hidden] {
+      display: none;
+    }
+
+    .bot-install-panel {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid color-mix(in oklab, var(--border), var(--accent) 18%);
+      background: color-mix(in oklab, var(--bg-secondary), rgba(56,189,248,0.08) 16%);
+    }
+
+    .bot-install-panel[hidden] {
+      display: none;
+    }
+
+    .bot-install-panel .btn {
+      justify-self: start;
+    }
+
+    .settings-oauth-status {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 8px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid color-mix(in oklab, var(--border), var(--accent) 18%);
+      background: color-mix(in oklab, var(--bg-secondary), rgba(56,189,248,0.08) 16%);
+      color: var(--subtext);
+    }
+
+    .settings-oauth-status h4 {
+      margin: 0;
+      font-size: 0.95rem;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .settings-oauth-status p {
+      margin: 0;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid color-mix(in oklab, var(--border), var(--accent) 22%);
+      object-fit: cover;
+    }
+
+    .scope-editor {
+      position: relative;
+      width: 100%;
+    }
+
+    .scope-editor-chips-row {
+      display: flex;
+      gap: 6px;
+      align-items: flex-start;
+    }
+
+    .scope-editor-chips {
+      flex: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 4px 6px;
+      min-height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--button-bg);
+      cursor: text;
+      align-items: center;
+    }
+
+    .scope-editor-chips:focus-within {
+      border-color: var(--accent);
+    }
+
+    .scope-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 5px 3px 8px;
+      border-radius: 5px;
+      background: var(--accent);
+      color: #001018;
+      font-size: 0.82rem;
+      line-height: 1.3;
+      white-space: nowrap;
+      max-width: 260px;
+    }
+
+    .scope-chip-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .scope-chip-remove {
+      all: unset;
+      cursor: pointer;
+      padding: 0 4px;
+      font-size: 0.9rem;
+      line-height: 1;
+      opacity: 0.72;
+      border-radius: 3px;
+    }
+
+    .scope-chip-remove:hover {
+      opacity: 1;
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .scope-editor-input {
+      all: unset;
+      flex: 1 1 120px;
+      min-width: 120px;
+      font-size: 0.88rem;
+      padding: 3px 0;
+      color: var(--text);
+    }
+
+    .scope-editor-input::placeholder {
+      color: var(--subtext);
+      font-style: italic;
+    }
+
+    .scope-editor-actions {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+      align-items: flex-start;
+      padding-top: 2px;
+    }
+
+    .scope-editor-action-btn {
+      white-space: nowrap;
+      font-size: 0.82rem;
+      padding: 6px 10px;
+    }
+
+    .scope-editor-dropdown {
+      position: absolute;
+      z-index: 20;
+      left: 0;
+      right: 0;
+      top: calc(100% + 4px);
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--button-bg);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .scope-editor-dropdown[hidden] {
+      display: none;
+    }
+
+    .scope-editor-dropdown-empty,
+    .scope-editor-dropdown-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      width: 100%;
+      padding: 8px 10px;
+      border: 0;
+      border-bottom: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      font: inherit;
+    }
+
+    .scope-editor-dropdown-item {
+      cursor: pointer;
+    }
+
+    .scope-editor-dropdown-item:last-child {
+      border-bottom: 0;
+    }
+
+    .scope-editor-dropdown-item:hover {
+      background: var(--accent);
+      color: #001018;
+    }
+
+    .scope-dropdown-value {
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+
+    .scope-dropdown-desc {
+      font-size: 0.78rem;
+      color: var(--subtext);
+      line-height: 1.3;
+    }
+
+    .scope-editor-dropdown-item:hover .scope-dropdown-desc {
+      color: color-mix(in oklab, #001018, white 18%);
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    @media (max-width: 680px) {
+      .settings-inline-fields,
+      .settings-browser-row,
+      .scope-editor-chips-row {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .settings-browser-row .input {
+        flex: 0 0 auto;
+        min-width: 0;
+        width: 100%;
+      }
+
+      .settings-inline-fields .btn,
+      .scope-editor-actions .btn {
+        width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
-<main>
-  <section>
-    <h1>Discord</h1>
-    <div class="status" id="status"></div>
-    <div class="row">
-      <button id="authorize">Connect</button>
-      <button id="disconnect" class="danger">Disconnect</button>
-      <button id="refresh" class="secondary">Refresh</button>
+  <main class="form-grid settings-grid">
+    <p class="settings-helper item-sub">
+      Connect Nyautomator to Discord for bot messaging, webhooks, and server events. Create an application in the
+      <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer">Discord Developer Portal</a>
+      and set the redirect URI to <code>http://localhost:8086/discord/callback</code> unless you override it below.
+    </p>
+
+    <label class="settings-label" for="discord-client-id">Client ID</label>
+    <input id="discord-client-id" class="input" autocomplete="off" placeholder="Discord Application Client ID">
+
+    <label class="settings-label" for="discord-client-secret">Client Secret</label>
+    <div class="settings-inline-fields">
+      <input id="discord-client-secret" class="input" type="password" autocomplete="off" placeholder="Discord Client Secret">
+      <button id="toggle-client-secret" type="button" class="btn">Show</button>
     </div>
-    <p id="message" class="muted"></p>
-  </section>
 
-  <section>
-    <h2>Module Config</h2>
-    <div class="grid">
-      <label>Client ID <input id="clientId" autocomplete="off"></label>
-      <label>Client Secret <input id="clientSecret" type="password" autocomplete="off"></label>
-      <label>Redirect URI <input id="redirectUri" autocomplete="off"></label>
-      <label>Guild ID <input id="guildId" autocomplete="off"></label>
-      <label>Bot Token <input id="botToken" type="password" autocomplete="off"></label>
-      <label>Auth Browser Path <input id="authBrowserPath" autocomplete="off" placeholder="Optional"></label>
+    <label class="settings-label" for="discord-redirect-uri">Redirect URI</label>
+    <input id="discord-redirect-uri" class="input" autocomplete="off" placeholder="http://localhost:8086/discord/callback">
+
+    <label class="settings-label" for="discord-scopes-input">Scopes</label>
+    <div class="scope-editor" id="scope-editor">
+      <div class="scope-editor-chips-row">
+        <div class="scope-editor-chips" id="scope-chips">
+          <input id="discord-scopes-input" class="scope-editor-input" autocomplete="off" spellcheck="false" placeholder="Type a custom scope...">
+        </div>
+        <div class="scope-editor-actions">
+          <button id="toggle-scope-dropdown" type="button" class="btn outline scope-editor-action-btn">Scopes</button>
+          <button id="auto-scopes" type="button" class="btn outline scope-editor-action-btn">Auto-generate</button>
+        </div>
+      </div>
+      <div id="scope-dropdown" class="scope-editor-dropdown" hidden></div>
     </div>
-    <label>Scopes <textarea id="scopes" spellcheck="false"></textarea></label>
-    <div class="row">
-      <button id="save">Save</button>
-      <button id="autoScopes" class="secondary">Auto Scopes</button>
+
+    <label class="settings-label" for="discord-bot-token">Bot Token (optional)</label>
+    <div class="settings-inline-fields">
+      <input id="discord-bot-token" class="input" type="password" autocomplete="off" placeholder="Bot token from the Discord Developer Portal">
+      <button id="toggle-bot-token" type="button" class="btn">Show</button>
     </div>
-  </section>
+    <p class="settings-inline-note">
+      Only needed for bot actions like sending messages or loading server channels.
+    </p>
 
-  <section>
-    <h2>Directory</h2>
-    <div class="row">
-      <button id="loadGuilds" class="secondary">Load Servers</button>
-      <button id="loadChannels" class="secondary">Load Channels</button>
+    <label class="settings-label" for="discord-guild-select">Server (optional)</label>
+    <select id="discord-guild-select" class="select">
+      <option value="">(Select a server)</option>
+    </select>
+    <input id="discord-guild-id" class="input" autocomplete="off" placeholder="Discord Server ID" hidden>
+    <p id="guild-scope-note" class="settings-inline-note" hidden>
+      Add <code>guilds</code> scope and reconnect Discord to browse your account servers.
+    </p>
+    <p id="selected-guild-note" class="settings-inline-note" hidden></p>
+    <p id="directory-message" class="settings-inline-note" hidden></p>
+    <div id="bot-install-panel" class="bot-install-panel" hidden>
+      <p id="bot-install-note" class="settings-inline-note"></p>
+      <button id="install-bot" type="button" class="btn">Install bot in selected server</button>
     </div>
-    <label>Servers <select id="guilds"></select></label>
-    <label>Channels <select id="channels"></select></label>
-    <p id="directoryMessage" class="muted"></p>
-  </section>
-</main>
 
-<script>
-const api = path => `/modules/discord/api/${path}`;
-const configUrl = '/modules/discord/config';
-const fields = ['clientId', 'clientSecret', 'redirectUri', 'guildId', 'botToken', 'authBrowserPath'];
-let config = {};
+    <label class="settings-label" for="discord-channel-select">Channel Browser</label>
+    <select id="discord-channel-select" class="select" disabled>
+      <option value="">(Select a channel)</option>
+    </select>
+    <p id="channel-note" class="settings-inline-note">Use this picker to browse channels for the selected server.</p>
 
-function setMessage(text, cls = 'muted') {
-  const el = document.getElementById('message');
-  el.className = cls;
-  el.textContent = text || '';
-}
+    <div class="settings-field-group">
+      <label class="settings-label" for="discord-browser-select">OAuth Browser Override</label>
+      <div class="settings-browser-row">
+        <select id="discord-browser-select" class="input"></select>
+        <input id="discord-auth-browser-path" class="input" autocomplete="off" placeholder="C:\Program Files\Google\Chrome\Application\chrome.exe" hidden>
+      </div>
+      <p id="browser-summary" class="settings-inline-note"></p>
+    </div>
 
-function scopesFromText(value) {
-  return (value || '').split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
-}
+    <div id="discord-status" class="settings-oauth-status" hidden>
+      <h4>Status</h4>
+      <div class="status-row">
+        <img id="discord-avatar" class="avatar" alt="Discord avatar" hidden>
+        <p id="discord-status-summary" class="settings-inline-note"></p>
+      </div>
+      <p id="discord-username" class="settings-inline-note" hidden></p>
+      <p id="discord-user-id" class="settings-inline-note" hidden></p>
+      <p id="discord-updated" class="settings-inline-note"></p>
+    </div>
 
-function renderConfig() {
-  for (const field of fields) document.getElementById(field).value = config[field] || '';
-  document.getElementById('scopes').value = Array.isArray(config.scopes) ? config.scopes.join('\n') : '';
-}
+    <div class="settings-inline-actions">
+      <button id="authorize" type="button" class="btn">Connect Discord</button>
+      <button id="disconnect" type="button" class="btn outline">Disconnect</button>
+      <button id="refresh-guilds" type="button" class="btn outline">Refresh servers</button>
+      <button id="load-channels" type="button" class="btn outline">Load channels</button>
+    </div>
 
-async function loadConfig() {
-  const res = await fetch(configUrl, { cache: 'no-store' });
-  config = res.ok ? await res.json() : {};
-  renderConfig();
-}
+    <p id="message" class="settings-inline-note" hidden></p>
+  </main>
 
-async function saveConfig() {
-  for (const field of fields) config[field] = document.getElementById(field).value.trim();
-  config.scopes = scopesFromText(document.getElementById('scopes').value);
-  const res = await fetch(configUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config)
-  });
-  setMessage(res.ok ? 'Saved Discord module config.' : 'Failed to save Discord module config.', res.ok ? 'success' : 'error');
-  await loadStatus();
-}
+  <script>
+    const api = path => `/modules/discord/api/${path}`;
+    const configUrl = '/modules/discord/config';
+    const BROWSER_VALUE_CUSTOM = '__custom__';
+    const BROWSER_SYSTEM_SENTINEL = '__system__';
+    const settingsStoragePrefix = 'nyautomator.discord.settings.';
+    const fields = {
+      clientId: document.getElementById('discord-client-id'),
+      clientSecret: document.getElementById('discord-client-secret'),
+      redirectUri: document.getElementById('discord-redirect-uri'),
+      guildId: document.getElementById('discord-guild-id'),
+      botToken: document.getElementById('discord-bot-token'),
+      authBrowserPath: document.getElementById('discord-auth-browser-path'),
+      authBrowserSelect: document.getElementById('discord-browser-select')
+    };
+    const knownScopes = [
+      { value: 'activities.read', description: 'Fetch data from a user\'s Now Playing/Recently Played list' },
+      { value: 'activities.write', description: 'Update a user\'s activity' },
+      { value: 'applications.builds.read', description: 'Read build data for a user\'s applications' },
+      { value: 'applications.builds.upload', description: 'Upload or update builds for a user\'s applications' },
+      { value: 'applications.commands', description: 'Add application commands to a server' },
+      { value: 'applications.commands.permissions.update', description: 'Update permissions for application commands in a server' },
+      { value: 'applications.commands.update', description: 'Update application commands using a Bearer token' },
+      { value: 'applications.entitlements', description: 'Read entitlements for a user\'s applications' },
+      { value: 'applications.store.update', description: 'Read and update store data, SKUs, listings, and achievements' },
+      { value: 'bot', description: 'Install the bot in the selected server' },
+      { value: 'connections', description: 'Return linked third-party accounts from /users/@me/connections' },
+      { value: 'dm_channels.read', description: 'See information about the user\'s DMs and group DMs' },
+      { value: 'email', description: 'Return the connected account email from /users/@me' },
+      { value: 'gdm.join', description: 'Join users to a group DM' },
+      { value: 'guilds', description: 'Return basic information about the user\'s servers' },
+      { value: 'guilds.join', description: 'Join users to a server' },
+      { value: 'guilds.members.read', description: 'Return a user\'s member information in a server' },
+      { value: 'identify', description: 'Return the connected Discord user identity' },
+      { value: 'identify.premium', description: 'Read a user\'s Nitro subscription type' },
+      { value: 'messages.read', description: 'Read messages from local RPC client channels' },
+      { value: 'relationships.read', description: 'Access a user\'s friends list, pending requests, and blocked users' },
+      { value: 'role_connections.write', description: 'Update a user\'s connection and metadata for the app' },
+      { value: 'rpc', description: 'Control a user\'s local Discord client' },
+      { value: 'rpc.activities.write', description: 'Update a user\'s activity through local RPC' },
+      { value: 'rpc.notifications.read', description: 'Receive notifications pushed to the user through local RPC' },
+      { value: 'rpc.voice.read', description: 'Read voice settings and listen for voice events through local RPC' },
+      { value: 'rpc.voice.write', description: 'Update voice settings through local RPC' },
+      { value: 'voice', description: 'Connect to voice on a user\'s behalf and see voice members' },
+      { value: 'webhook.incoming', description: 'Generate a webhook returned in the OAuth token response' }
+    ];
 
-async function loadStatus() {
-  const res = await fetch(api('status'), { cache: 'no-store' });
-  const data = res.ok ? await res.json() : null;
-  const status = document.getElementById('status');
-  status.innerHTML = '';
-  const connected = data && data.connected;
-  status.append(pill(connected ? 'Connected' : 'Disconnected', connected ? 'ok' : 'warn'));
-  if (data?.account?.displayName) status.append(pill(data.account.displayName));
-  if (Array.isArray(data?.scopes) && data.scopes.length) status.append(pill(data.scopes.join(', ')));
-}
+    let config = {};
+    let status = null;
+    let guilds = [];
+    let channels = [];
+    let selectedChannelId = '';
+    let scopes = [];
+    let availableBrowsers = [];
+    let browsersLoading = false;
+    let scopeDropdownOpen = false;
+    let busy = false;
+    let selectionSaveTimer = null;
 
-function pill(text, cls = '') {
-  const el = document.createElement('span');
-  el.className = `pill ${cls}`.trim();
-  el.textContent = text;
-  return el;
-}
+    function applyParentTheme() {
+      try {
+        const parentTheme = window.parent?.document?.documentElement?.dataset?.theme
+          || window.parent?.document?.body?.dataset?.theme
+          || '';
+        document.documentElement.dataset.theme = parentTheme;
+      } catch {
+        document.documentElement.dataset.theme = '';
+      }
+    }
 
-async function authorize() {
-  setMessage('Waiting for Discord authorization...');
-  const res = await fetch(api('authorize'), { method: 'POST' });
-  const data = res.ok ? await res.json() : {};
-  setMessage(data.success ? 'Discord connected.' : (data.message || 'Discord authorization failed.'), data.success ? 'success' : 'error');
-  await loadStatus();
-  await loadGuilds(true);
-}
+    function postHeight() {
+      const height = Math.max(
+        document.documentElement.scrollHeight,
+        document.body.scrollHeight,
+        document.body.offsetHeight
+      );
+      window.parent?.postMessage({
+        type: 'nyautomator:module-frame-height',
+        moduleId: 'discord',
+        assetPath: 'settings/settings.html',
+        height
+      }, window.location.origin);
+    }
 
-async function disconnect() {
-  const res = await fetch(api('token'), { method: 'DELETE' });
-  setMessage(res.ok ? 'Discord disconnected.' : 'Failed to disconnect Discord.', res.ok ? 'success' : 'error');
-  await loadStatus();
-}
+    function setBusy(value) {
+      busy = !!value;
+      for (const id of ['save', 'authorize', 'disconnect', 'refresh-guilds', 'load-channels', 'auto-scopes']) {
+        const button = document.getElementById(id);
+        if (button) button.disabled = busy;
+      }
+      const installButton = document.getElementById('install-bot');
+      if (installButton) {
+        installButton.disabled = busy || !String(config.clientId || '').trim() || !normalizeSnowflake(config.guildId);
+      }
+    }
 
-async function autoScopes() {
-  const res = await fetch(api('scopes/auto'), { cache: 'no-store' });
-  const data = res.ok ? await res.json() : {};
-  const merged = new Set([...(config.scopes || []), ...(data.scopes || [])]);
-  config.scopes = [...merged].sort((a, b) => a.localeCompare(b));
-  renderConfig();
-}
+    function setMessage(text, tone = '') {
+      const el = document.getElementById('message');
+      el.textContent = text || '';
+      el.hidden = !text;
+      el.className = `settings-inline-note${tone ? ` ${tone}` : ''}`;
+      postHeight();
+    }
 
-async function loadGuilds(refresh = false) {
-  const res = await fetch(api(`guilds${refresh ? '?refresh=true' : ''}`), { cache: 'no-store' });
-  const data = res.ok ? await res.json() : {};
-  const select = document.getElementById('guilds');
-  select.innerHTML = '';
-  for (const guild of data.guilds || []) {
-    const option = document.createElement('option');
-    option.value = guild.id;
-    option.textContent = guild.botInstalled ? guild.name : `${guild.name} (bot missing)`;
-    select.append(option);
-  }
-  if (config.guildId) select.value = config.guildId;
-  document.getElementById('directoryMessage').textContent = data.message || '';
-}
+    function setDirectoryMessage(text) {
+      const el = document.getElementById('directory-message');
+      el.textContent = text || '';
+      el.hidden = !text;
+      postHeight();
+    }
 
-async function loadChannels() {
-  const guildId = document.getElementById('guilds').value || config.guildId || '';
-  const res = await fetch(api(`channels?guildId=${encodeURIComponent(guildId)}&refresh=true`), { cache: 'no-store' });
-  const data = res.ok ? await res.json() : {};
-  const select = document.getElementById('channels');
-  select.innerHTML = '';
-  for (const channel of data.channels || []) {
-    const option = document.createElement('option');
-    option.value = channel.id;
-    option.textContent = channel.displayName || channel.name || channel.id;
-    select.append(option);
-  }
-  document.getElementById('directoryMessage').textContent = data.message || '';
-}
+    function formatDateTime(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+    }
 
-document.getElementById('save').addEventListener('click', saveConfig);
-document.getElementById('authorize').addEventListener('click', authorize);
-document.getElementById('disconnect').addEventListener('click', disconnect);
-document.getElementById('refresh').addEventListener('click', loadStatus);
-document.getElementById('autoScopes').addEventListener('click', autoScopes);
-document.getElementById('loadGuilds').addEventListener('click', () => loadGuilds(true));
-document.getElementById('loadChannels').addEventListener('click', loadChannels);
-document.getElementById('guilds').addEventListener('change', event => { config.guildId = event.target.value; document.getElementById('guildId').value = config.guildId; });
+    function normalizeSnowflake(value) {
+      const trimmed = String(value || '').trim();
+      if (!trimmed) return '';
+      const pipeIndex = trimmed.indexOf('|');
+      return (pipeIndex > 0 ? trimmed.slice(0, pipeIndex) : trimmed).trim();
+    }
 
-loadConfig().then(loadStatus).then(() => loadGuilds(false)).catch(err => setMessage(err.message, 'error'));
-</script>
+    function readRememberedGuild(id) {
+      const guildId = normalizeSnowflake(id);
+      if (!guildId) return null;
+
+      try {
+        const raw = localStorage.getItem(`${settingsStoragePrefix}guild.${guildId}`);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function rememberGuild(guild) {
+      const id = normalizeSnowflake(guild?.id);
+      if (!id) return;
+
+      const remembered = {
+        id,
+        name: guild.name || `Server ${id}`,
+        iconUrl: guild.iconUrl || '',
+        botInstalled: guild.botInstalled === true,
+        botInstallKnown: guild.botInstallKnown !== false,
+        source: guild.source || 'remembered'
+      };
+
+      try {
+        localStorage.setItem(`${settingsStoragePrefix}guildId`, id);
+        localStorage.setItem(`${settingsStoragePrefix}guild.${id}`, JSON.stringify(remembered));
+      } catch {
+        // Local storage is a convenience cache only.
+      }
+    }
+
+    function normalizeGuildListing(guild) {
+      const id = normalizeSnowflake(guild?.id);
+      if (!id) return null;
+
+      return {
+        ...guild,
+        id,
+        name: String(guild?.name || `Server ${id}`).trim(),
+        iconUrl: guild?.iconUrl || '',
+        botInstalled: guild?.botInstalled === true,
+        botInstallKnown: guild?.botInstallKnown !== false,
+        source: guild?.source || 'user'
+      };
+    }
+
+    function mergeGuildDirectories(items) {
+      const map = new Map();
+      for (const item of items || []) {
+        const guild = normalizeGuildListing(item);
+        if (guild) map.set(guild.id, guild);
+      }
+
+      const configuredId = normalizeSnowflake(config.guildId);
+      if (configuredId && !map.has(configuredId)) {
+        const remembered = readRememberedGuild(configuredId) || {};
+        const hasRememberedInstall = typeof remembered.botInstalled === 'boolean';
+        const hasConfigInstall = typeof config.guildBotInstalled === 'boolean';
+        map.set(configuredId, {
+          id: configuredId,
+          name: config.guildName || remembered.name || `Server ${configuredId}`,
+          iconUrl: config.guildIconUrl || remembered.iconUrl || '',
+          botInstalled: hasConfigInstall ? config.guildBotInstalled === true : remembered.botInstalled === true,
+          botInstallKnown: hasConfigInstall || hasRememberedInstall ? true : false,
+          source: 'configured'
+        });
+      }
+
+      return [...map.values()]
+        .sort((left, right) =>
+          String(left.name || left.id).localeCompare(String(right.name || right.id), undefined, { sensitivity: 'base' }));
+    }
+
+    function selectedGuild() {
+      const currentGuildId = normalizeSnowflake(config.guildId);
+      return guilds.find(guild => guild.id === currentGuildId) || null;
+    }
+
+    function guildInstallSuffix(guild) {
+      if (!guild || guild.botInstalled === true) return '';
+      return guild.botInstallKnown === false
+        ? ' (bot install unknown)'
+        : ' (bot not installed)';
+    }
+
+    function guildInstallNote(guild) {
+      if (!guild) return '';
+      if (guild.botInstalled === true) return '';
+      return guild.botInstallKnown === false
+        ? ' (bot install status unknown)'
+        : ' (bot not installed yet)';
+    }
+
+    function captureSelectedGuildMetadata() {
+      const guild = selectedGuild();
+      if (!guild) return;
+
+      config.guildName = guild.name || config.guildName || '';
+      config.guildIconUrl = guild.iconUrl || config.guildIconUrl || '';
+      if (guild.botInstallKnown !== false)
+        config.guildBotInstalled = guild.botInstalled === true;
+      rememberGuild(guild);
+    }
+
+    function hasBrowserPath(value) {
+      const normalized = String(value || '').trim().toLowerCase();
+      return !!normalized && availableBrowsers.some(browser => browser.path.toLowerCase() === normalized);
+    }
+
+    function browserSelectValue() {
+      const value = String(config.authBrowserPath || '').trim();
+      if (!value || value === BROWSER_SYSTEM_SENTINEL) return '';
+      return hasBrowserPath(value) ? value : BROWSER_VALUE_CUSTOM;
+    }
+
+    function addBrowserOption(select, value, text) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = text;
+      select.append(option);
+    }
+
+    function renderBrowserControl() {
+      const select = fields.authBrowserSelect;
+      const customInput = fields.authBrowserPath;
+      const selected = browserSelectValue();
+
+      select.innerHTML = '';
+      addBrowserOption(select, '', 'System default');
+      for (const browser of availableBrowsers) {
+        addBrowserOption(select, browser.path, browser.name);
+      }
+      addBrowserOption(select, BROWSER_VALUE_CUSTOM, 'Custom path...');
+      select.value = selected;
+
+      customInput.hidden = selected !== BROWSER_VALUE_CUSTOM;
+      customInput.value = selected === BROWSER_VALUE_CUSTOM
+        ? (config.authBrowserPath || '')
+        : '';
+
+      const summary = document.getElementById('browser-summary');
+      summary.textContent = browsersLoading
+        ? 'Detecting installed browsers...'
+        : availableBrowsers.length > 0
+          ? `Detected ${availableBrowsers.length} browser${availableBrowsers.length === 1 ? '' : 's'} on this system.`
+          : 'No installed browsers were detected automatically. Use Custom path if needed.';
+
+      postHeight();
+    }
+
+    async function loadBrowsers() {
+      browsersLoading = true;
+      renderBrowserControl();
+      try {
+        const data = await fetchJson('/system/browsers');
+        const seen = new Set();
+        availableBrowsers = (Array.isArray(data?.browsers) ? data.browsers : [])
+          .map(browser => {
+            const name = typeof browser?.name === 'string' && browser.name.trim()
+              ? browser.name.trim()
+              : 'Browser';
+            const path = typeof browser?.executablePath === 'string'
+              ? browser.executablePath.trim()
+              : '';
+            return { name, path };
+          })
+          .filter(browser => {
+            if (!browser.path) return false;
+            const key = browser.path.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+      } catch {
+        availableBrowsers = [];
+      } finally {
+        browsersLoading = false;
+        renderBrowserControl();
+      }
+    }
+
+    function uniqueScopes(values) {
+      const seen = new Set();
+      const result = [];
+      for (const value of values || []) {
+        const scope = String(value || '').trim();
+        const key = scope.toLowerCase();
+        if (!scope || seen.has(key)) continue;
+        seen.add(key);
+        result.push(scope);
+      }
+      return result;
+    }
+
+    function scopesFromText(value) {
+      return uniqueScopes(String(value || '').split(/[\s,]+/));
+    }
+
+    function readConfigFromFields() {
+      const browserSelection = fields.authBrowserSelect.value;
+      const authBrowserPath = browserSelection === BROWSER_VALUE_CUSTOM
+        ? fields.authBrowserPath.value.trim()
+        : browserSelection.trim();
+      const guildId = normalizeSnowflake(document.getElementById('discord-guild-select').hidden
+        ? fields.guildId.value
+        : (document.getElementById('discord-guild-select').value || fields.guildId.value));
+      const guild = guilds.find(item => item.id === guildId);
+      const remembered = readRememberedGuild(guildId) || {};
+      const knownInstall = guild?.botInstallKnown !== false && typeof guild?.botInstalled === 'boolean'
+        ? guild.botInstalled === true
+        : typeof config.guildBotInstalled === 'boolean'
+          ? config.guildBotInstalled === true
+          : typeof remembered.botInstalled === 'boolean'
+            ? remembered.botInstalled === true
+            : null;
+      config = {
+        ...config,
+        clientId: fields.clientId.value.trim(),
+        clientSecret: fields.clientSecret.value.trim(),
+        redirectUri: fields.redirectUri.value.trim(),
+        guildId,
+        guildName: guildId ? (guild?.name || config.guildName || remembered.name || '') : '',
+        guildIconUrl: guildId ? (guild?.iconUrl || config.guildIconUrl || remembered.iconUrl || '') : '',
+        guildBotInstalled: guildId ? knownInstall : null,
+        botToken: fields.botToken.value.trim(),
+        authBrowserPath,
+        scopes: uniqueScopes(scopes)
+      };
+      try {
+        if (guildId) localStorage.setItem(`${settingsStoragePrefix}guildId`, guildId);
+        else localStorage.removeItem(`${settingsStoragePrefix}guildId`);
+      } catch {
+        // Local storage is a convenience cache only.
+      }
+      if (guild) rememberGuild(guild);
+      return config;
+    }
+
+    function renderConfig() {
+      config.guildId = normalizeSnowflake(config.guildId || localStorage.getItem(`${settingsStoragePrefix}guildId`));
+      fields.clientId.value = config.clientId || '';
+      fields.clientSecret.value = config.clientSecret || '';
+      fields.redirectUri.value = config.redirectUri || '';
+      fields.guildId.value = config.guildId || '';
+      fields.botToken.value = config.botToken || '';
+      scopes = uniqueScopes(Array.isArray(config.scopes) ? config.scopes : []);
+      renderScopes();
+      renderGuildControl();
+      renderBrowserControl();
+      postHeight();
+    }
+
+    function renderScopes() {
+      const chipContainer = document.getElementById('scope-chips');
+      const input = document.getElementById('discord-scopes-input');
+      chipContainer.querySelectorAll('.scope-chip').forEach(chip => chip.remove());
+
+      for (const scope of scopes) {
+        const chip = document.createElement('span');
+        chip.className = 'scope-chip';
+        const known = knownScopes.find(item => item.value.toLowerCase() === scope.toLowerCase());
+        if (known) chip.title = known.description;
+
+        const label = document.createElement('span');
+        label.className = 'scope-chip-label';
+        label.textContent = scope;
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'scope-chip-remove';
+        remove.textContent = 'x';
+        remove.setAttribute('aria-label', `Remove ${scope}`);
+        remove.addEventListener('click', event => {
+          event.stopPropagation();
+          scopes = scopes.filter(item => item.toLowerCase() !== scope.toLowerCase());
+          renderScopes();
+        });
+
+        chip.append(label, remove);
+        chipContainer.insertBefore(chip, input);
+      }
+
+      input.placeholder = scopes.length ? '' : 'Type a custom scope...';
+      renderScopeDropdown();
+      postHeight();
+    }
+
+    function renderScopeDropdown() {
+      const dropdown = document.getElementById('scope-dropdown');
+      dropdown.innerHTML = '';
+      dropdown.hidden = !scopeDropdownOpen;
+
+      if (!scopeDropdownOpen) return;
+
+      const selected = new Set(scopes.map(scope => scope.toLowerCase()));
+      const available = knownScopes.filter(scope => !selected.has(scope.value.toLowerCase()));
+      if (available.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'scope-editor-dropdown-empty';
+        empty.textContent = 'All known scopes added';
+        dropdown.append(empty);
+        return;
+      }
+
+      for (const scope of available) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'scope-editor-dropdown-item';
+        button.innerHTML = `<span class="scope-dropdown-value"></span><span class="scope-dropdown-desc"></span>`;
+        button.querySelector('.scope-dropdown-value').textContent = scope.value;
+        button.querySelector('.scope-dropdown-desc').textContent = scope.description;
+        button.addEventListener('click', () => {
+          scopes = uniqueScopes([...scopes, scope.value]);
+          scopeDropdownOpen = false;
+          renderScopes();
+        });
+        dropdown.append(button);
+      }
+    }
+
+    function commitScopeInput() {
+      const input = document.getElementById('discord-scopes-input');
+      const additions = scopesFromText(input.value);
+      if (additions.length > 0) {
+        scopes = uniqueScopes([...scopes, ...additions]);
+        input.value = '';
+        renderScopes();
+      }
+    }
+
+    function renderGuildControl() {
+      const select = document.getElementById('discord-guild-select');
+      const input = document.getElementById('discord-guild-id');
+      const currentGuildId = normalizeSnowflake(config.guildId);
+      config.guildId = currentGuildId;
+      guilds = mergeGuildDirectories(guilds);
+
+      if (guilds.length > 0) {
+        select.hidden = false;
+        input.hidden = true;
+        select.innerHTML = '<option value="">(Select a server)</option>';
+        for (const guild of guilds) {
+          const option = document.createElement('option');
+          option.value = guild.id || '';
+          option.textContent = `${guild.name || guild.id}${guildInstallSuffix(guild)}`;
+          select.append(option);
+        }
+        select.value = currentGuildId;
+      } else {
+        select.hidden = true;
+        input.hidden = false;
+        input.value = currentGuildId;
+      }
+
+      const selectedGuild = guilds.find(guild => guild.id === currentGuildId);
+      const selectedGuildNote = document.getElementById('selected-guild-note');
+      if (selectedGuild) {
+        selectedGuildNote.textContent = `Selected server: ${selectedGuild.name || selectedGuild.id}${guildInstallNote(selectedGuild)}`;
+        selectedGuildNote.hidden = false;
+        captureSelectedGuildMetadata();
+      } else {
+        selectedGuildNote.hidden = true;
+      }
+
+      const installPanel = document.getElementById('bot-install-panel');
+      const installNote = document.getElementById('bot-install-note');
+      const installButton = document.getElementById('install-bot');
+      const clientId = String(config.clientId || '').trim();
+      const guildLabel = selectedGuild?.name || currentGuildId;
+
+      installPanel.hidden = !currentGuildId;
+      if (currentGuildId) {
+        const installed = selectedGuild?.botInstalled === true;
+        const installKnown = selectedGuild?.botInstallKnown !== false;
+        installButton.textContent = installed
+          ? 'Reinstall or update bot permissions'
+          : 'Install bot in selected server';
+        installButton.disabled = busy || !clientId;
+        installNote.textContent = clientId
+          ? installed
+            ? `Discord reports the bot is installed in ${guildLabel}. Use this if you need to refresh permissions.`
+            : installKnown
+              ? `Open Discord's bot install prompt for ${guildLabel}.`
+              : `Discord could not verify whether the bot is installed in ${guildLabel}. Use this to install or refresh permissions.`
+          : 'Enter a Client ID to enable the bot install prompt.';
+      }
+
+      renderChannels();
+    }
+
+    function renderChannels() {
+      const select = document.getElementById('discord-channel-select');
+      select.innerHTML = '<option value="">(Select a channel)</option>';
+      for (const channel of channels) {
+        const option = document.createElement('option');
+        option.value = normalizeSnowflake(channel.id || channel.optionValue || '');
+        option.textContent = channel.displayName || channel.name || channel.id;
+        select.append(option);
+      }
+      select.value = selectedChannelId;
+      select.disabled = !config.guildId || busy || channels.length === 0;
+
+      const note = document.getElementById('channel-note');
+      note.textContent = selectedChannelId
+        ? `Selected Channel ID: ${selectedChannelId}`
+        : 'Use this picker to browse channels for the selected server.';
+      postHeight();
+    }
+
+    function renderStatus() {
+      const statusBox = document.getElementById('discord-status');
+      if (!status) {
+        statusBox.hidden = true;
+        return;
+      }
+
+      const account = status.account || {};
+      const metadata = status.metadata || {};
+      const displayName = account.displayName || account.login || '';
+      const summary = `${status.connected ? 'Connected' : 'Not connected'}${displayName ? ` as ${displayName}` : ''}${status.scope ? ` (${status.scope})` : ''}`;
+      document.getElementById('discord-status-summary').textContent = summary;
+
+      const avatar = document.getElementById('discord-avatar');
+      const avatarUrl = metadata.avatarUrl || metadata.avatarURL || '';
+      avatar.hidden = !avatarUrl;
+      if (avatarUrl) avatar.src = avatarUrl;
+
+      const username = metadata.username || account.login || '';
+      const usernameEl = document.getElementById('discord-username');
+      usernameEl.hidden = !username;
+      usernameEl.innerHTML = username ? `Username: <code></code>` : '';
+      if (username) usernameEl.querySelector('code').textContent = username;
+
+      const accountId = account.id || status.accountId || '';
+      const userIdEl = document.getElementById('discord-user-id');
+      userIdEl.hidden = !accountId;
+      userIdEl.innerHTML = accountId ? `User ID: <code></code>` : '';
+      if (accountId) userIdEl.querySelector('code').textContent = accountId;
+
+      document.getElementById('discord-updated').textContent = `Updated: ${formatDateTime(status.updatedAtUtc) || 'N/A'}`;
+      statusBox.hidden = false;
+
+      const statusScopes = Array.isArray(status.scopes) ? status.scopes : scopesFromText(status.scope || '');
+      const hasGuildScope = statusScopes.some(scope => scope.toLowerCase() === 'guilds');
+      document.getElementById('guild-scope-note').hidden = hasGuildScope;
+      postHeight();
+    }
+
+    async function fetchJson(url, options) {
+      const response = await fetch(url, { cache: 'no-store', ...(options || {}) });
+      const body = response.headers.get('content-type')?.includes('application/json')
+        ? await response.json()
+        : {};
+      if (!response.ok) {
+        throw new Error(body.message || body.error || body.detail || `Request failed (${response.status})`);
+      }
+      return body;
+    }
+
+    async function loadConfig() {
+      config = await fetchJson(configUrl);
+      renderConfig();
+    }
+
+    function scheduleSelectionSave() {
+      clearTimeout(selectionSaveTimer);
+      selectionSaveTimer = setTimeout(persistSelection, 450);
+    }
+
+    async function persistSelection() {
+      if (busy) {
+        scheduleSelectionSave();
+        return;
+      }
+
+      try {
+        readConfigFromFields();
+        await fetchJson(configUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(config)
+        });
+      } catch (error) {
+        setMessage(`Selected Discord server could not be saved: ${error.message || error}`, 'error');
+      }
+    }
+
+    async function saveConfig() {
+      clearTimeout(selectionSaveTimer);
+      commitScopeInput();
+      readConfigFromFields();
+      await fetchJson(configUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+      setMessage('Saved Discord module config.', 'success');
+      try {
+        await loadStatus();
+      } catch {
+        postHeight();
+      }
+    }
+
+    async function installBot() {
+      commitScopeInput();
+      readConfigFromFields();
+      if (!config.clientId) throw new Error('Enter a Discord application Client ID before installing the bot.');
+      if (!config.guildId) throw new Error('Select a server before installing the bot.');
+
+      await fetchJson(configUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+
+      const result = await fetchJson(api(`bot/install?guildId=${encodeURIComponent(config.guildId)}`), { method: 'POST' });
+      setMessage(result.message || 'Opened Discord bot install prompt. After approving it, refresh servers here.', 'success');
+    }
+
+    async function loadStatus() {
+      status = await fetchJson(api('status'));
+      renderStatus();
+      return status;
+    }
+
+    async function authorize() {
+      setMessage('Waiting for Discord authorization...');
+      const result = await fetchJson(api('authorize'), { method: 'POST' });
+      setMessage(result.success ? 'Discord connected.' : (result.message || 'Discord authorization failed.'), result.success ? 'success' : 'error');
+      await loadStatus();
+      await loadGuilds(true);
+    }
+
+    async function disconnect() {
+      await fetchJson(api('token'), { method: 'DELETE' });
+      setMessage('Discord disconnected.', 'success');
+      status = null;
+      channels = [];
+      selectedChannelId = '';
+      renderStatus();
+      renderChannels();
+      try {
+        await loadStatus();
+      } catch {
+        postHeight();
+      }
+    }
+
+    async function autoGenerateScopes() {
+      document.getElementById('auto-scopes').textContent = 'Generating...';
+      const data = await fetchJson(api('scopes/auto'));
+      scopes = uniqueScopes([...scopes, ...(data.scopes || [])]).sort((a, b) => a.localeCompare(b));
+      renderScopes();
+      document.getElementById('auto-scopes').textContent = 'Auto-generate';
+    }
+
+    async function loadGuilds(refresh = false) {
+      const data = await fetchJson(api(`guilds${refresh ? '?refresh=true' : ''}`));
+      if (data.configuredGuildId && !config.guildId) config.guildId = data.configuredGuildId;
+      if (data.configuredGuildName && !config.guildName) config.guildName = data.configuredGuildName;
+      if (data.configuredGuildIconUrl && !config.guildIconUrl) config.guildIconUrl = data.configuredGuildIconUrl;
+      if (typeof data.configuredGuildBotInstalled === 'boolean' && typeof config.guildBotInstalled !== 'boolean')
+        config.guildBotInstalled = data.configuredGuildBotInstalled;
+      guilds = mergeGuildDirectories(Array.isArray(data.guilds) ? data.guilds : []);
+      for (const guild of guilds) rememberGuild(guild);
+      captureSelectedGuildMetadata();
+      setDirectoryMessage(data.message || '');
+      document.getElementById('guild-scope-note').hidden = data.hasGuildScope !== false;
+      renderGuildControl();
+    }
+
+    async function loadChannels(refresh = true) {
+      readConfigFromFields();
+      const guildId = config.guildId || '';
+      const data = await fetchJson(api(`channels?guildId=${encodeURIComponent(guildId)}&refresh=${refresh ? 'true' : 'false'}`));
+      channels = Array.isArray(data.channels) ? data.channels : [];
+      setDirectoryMessage(data.message || '');
+      renderChannels();
+    }
+
+    function wireEvents() {
+      document.getElementById('scope-chips').addEventListener('click', () => document.getElementById('discord-scopes-input').focus());
+      document.getElementById('discord-scopes-input').addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ',') {
+          event.preventDefault();
+          commitScopeInput();
+        } else if (event.key === 'Backspace' && !event.currentTarget.value && scopes.length > 0) {
+          scopes = scopes.slice(0, -1);
+          renderScopes();
+        }
+      });
+      document.getElementById('discord-scopes-input').addEventListener('paste', event => {
+        event.preventDefault();
+        scopes = uniqueScopes([...scopes, ...scopesFromText(event.clipboardData.getData('text'))]);
+        renderScopes();
+      });
+      document.getElementById('discord-scopes-input').addEventListener('blur', commitScopeInput);
+      document.getElementById('toggle-scope-dropdown').addEventListener('click', () => {
+        scopeDropdownOpen = !scopeDropdownOpen;
+        renderScopeDropdown();
+        postHeight();
+      });
+      document.addEventListener('click', event => {
+        if (!document.getElementById('scope-editor').contains(event.target)) {
+          scopeDropdownOpen = false;
+          renderScopeDropdown();
+          postHeight();
+        }
+      });
+
+      document.getElementById('toggle-client-secret').addEventListener('click', () => toggleSecret('discord-client-secret', 'toggle-client-secret'));
+      document.getElementById('toggle-bot-token').addEventListener('click', () => toggleSecret('discord-bot-token', 'toggle-bot-token'));
+      fields.clientId.addEventListener('input', event => {
+        config.clientId = event.target.value.trim();
+        renderGuildControl();
+      });
+      document.getElementById('authorize').addEventListener('click', guarded(authorize));
+      document.getElementById('disconnect').addEventListener('click', guarded(disconnect));
+      document.getElementById('auto-scopes').addEventListener('click', guarded(autoGenerateScopes));
+      document.getElementById('refresh-guilds').addEventListener('click', guarded(() => loadGuilds(true)));
+      document.getElementById('load-channels').addEventListener('click', guarded(() => loadChannels(true)));
+      document.getElementById('install-bot').addEventListener('click', guarded(installBot));
+      fields.authBrowserSelect.addEventListener('change', event => {
+        const value = event.target.value;
+        if (value === BROWSER_VALUE_CUSTOM) {
+          if (!config.authBrowserPath || config.authBrowserPath === BROWSER_SYSTEM_SENTINEL) {
+            config.authBrowserPath = '';
+          }
+        } else {
+          config.authBrowserPath = value;
+        }
+        renderBrowserControl();
+      });
+      fields.authBrowserPath.addEventListener('input', event => {
+        config.authBrowserPath = event.target.value;
+      });
+      document.getElementById('discord-guild-select').addEventListener('change', event => {
+        config.guildId = normalizeSnowflake(event.target.value);
+        fields.guildId.value = config.guildId;
+        selectedChannelId = '';
+        channels = [];
+        captureSelectedGuildMetadata();
+        renderGuildControl();
+        scheduleSelectionSave();
+      });
+      fields.guildId.addEventListener('input', event => {
+        config.guildId = normalizeSnowflake(event.target.value);
+        fields.guildId.value = config.guildId;
+        selectedChannelId = '';
+        channels = [];
+        renderChannels();
+      });
+      fields.guildId.addEventListener('change', () => {
+        guilds = mergeGuildDirectories(guilds);
+        captureSelectedGuildMetadata();
+        renderGuildControl();
+        scheduleSelectionSave();
+      });
+      fields.guildId.addEventListener('blur', () => {
+        guilds = mergeGuildDirectories(guilds);
+        captureSelectedGuildMetadata();
+        renderGuildControl();
+        scheduleSelectionSave();
+      });
+      document.getElementById('discord-channel-select').addEventListener('change', event => {
+        selectedChannelId = normalizeSnowflake(event.target.value);
+        renderChannels();
+      });
+    }
+
+    function toggleSecret(inputId, buttonId) {
+      const input = document.getElementById(inputId);
+      const button = document.getElementById(buttonId);
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      button.textContent = show ? 'Hide' : 'Show';
+    }
+
+    function guarded(action) {
+      return async () => {
+        if (busy) return;
+        setBusy(true);
+        try {
+          await action();
+        } catch (error) {
+          setMessage(error.message || String(error), 'error');
+        } finally {
+          document.getElementById('auto-scopes').textContent = 'Auto-generate';
+          setBusy(false);
+          postHeight();
+        }
+      };
+    }
+
+    async function saveForParent(requestId) {
+      if (busy) {
+        parent.postMessage({
+          type: 'nyautomator:module-settings-save-result',
+          requestId,
+          moduleId: 'discord',
+          ok: false,
+          error: 'Discord settings are busy.'
+        }, window.location.origin);
+        return;
+      }
+
+      setBusy(true);
+      try {
+        await saveConfig();
+        parent.postMessage({
+          type: 'nyautomator:module-settings-save-result',
+          requestId,
+          moduleId: 'discord',
+          ok: true
+        }, window.location.origin);
+      } catch (error) {
+        const message = error.message || String(error);
+        setMessage(message, 'error');
+        parent.postMessage({
+          type: 'nyautomator:module-settings-save-result',
+          requestId,
+          moduleId: 'discord',
+          ok: false,
+          error: message
+        }, window.location.origin);
+      } finally {
+        document.getElementById('auto-scopes').textContent = 'Auto-generate';
+        setBusy(false);
+        postHeight();
+      }
+    }
+
+    window.addEventListener('message', event => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data;
+      if (!data || data.type !== 'nyautomator:module-settings-save') return;
+      saveForParent(data.requestId || '');
+    });
+
+    applyParentTheme();
+    wireEvents();
+    loadBrowsers();
+    loadConfig()
+      .then(loadStatus)
+      .then(() => loadGuilds(false))
+      .catch(error => setMessage(error.message || String(error), 'error'))
+      .finally(postHeight);
+
+    if ('ResizeObserver' in window) {
+      new ResizeObserver(postHeight).observe(document.body);
+    }
+    window.addEventListener('load', postHeight);
+  </script>
 </body>
 </html>

@@ -4,7 +4,6 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Nyautomator;
 using Nyautomator.Discord;
 using Nyautomator.Module.Abstractions;
 using Nyautomator.OAuth;
@@ -17,11 +16,12 @@ namespace Nyautomator.Modules.Discord;
 
 public sealed class DiscordModuleBridge(
     IModuleOptionsProvider options,
-    IIntegrationTokenStore tokenStore,
-    IConfigurationService? configuration = null) : IModuleApiHandler, IAuthenticatedIntegrationAdapter
+    IIntegrationTokenStore tokenStore) : IModuleApiHandler, IAuthenticatedIntegrationAdapter
 {
     private const string TokenKey = "discord";
     private const string BotTokenKey = "discord:bot";
+    private const string SystemBrowserSentinel = "__system__";
+    private const string DefaultBotInstallPermissions = "347200";
     private const string ApiBase = "https://discord.com/api/v10";
     private static readonly Uri AuthorizeEndpoint = new("https://discord.com/oauth2/authorize");
     private static readonly Uri TokenEndpoint = new($"{ApiBase}/oauth2/token");
@@ -37,33 +37,12 @@ public sealed class DiscordModuleBridge(
 
     private readonly IModuleOptionsProvider _options = options;
     private readonly IIntegrationTokenStore _tokenStore = tokenStore;
-    private readonly IConfigurationService? _configuration = configuration;
     private readonly object _directoryCacheLock = new();
     private CachedDirectoryPayload? _guildsCache;
     private CachedDirectoryPayload? _channelsCache;
 
     public string ModuleId => "discord";
     public string Id => "Discord";
-
-    public void MigrateLegacyOptions()
-    {
-        if (_configuration is null || _options.TryGetRaw(ModuleId, out _))
-            return;
-
-        var legacy = _configuration.GetOrLoad().Discord;
-        if (legacy is null)
-            return;
-
-        var hasLegacyValue = !string.IsNullOrWhiteSpace(legacy.ClientId)
-            || !string.IsNullOrWhiteSpace(legacy.ClientSecret)
-            || !string.IsNullOrWhiteSpace(legacy.RedirectUri)
-            || !string.IsNullOrWhiteSpace(legacy.BotToken)
-            || !string.IsNullOrWhiteSpace(legacy.GuildId)
-            || legacy.Scopes.Count > 0;
-
-        if (hasLegacyValue)
-            _options.Write(ModuleId, DiscordModuleOptions.FromLegacy(legacy), force: true);
-    }
 
     public async Task<ModuleApiResponse> HandleAsync(ModuleApiRequest request, CancellationToken cancellationToken)
     {
@@ -74,6 +53,7 @@ public sealed class DiscordModuleBridge(
             {
                 "status" when IsGet(request) => ModuleApiResponse.Json(GetStatus()),
                 "authorize" when IsPost(request) => ModuleApiResponse.Json(await AuthorizeAsync(cancellationToken).ConfigureAwait(false)),
+                "bot/install" when IsPost(request) => OpenBotInstall(request),
                 "token" when IsDelete(request) => ClearToken(),
                 "guilds" when IsGet(request) => await GetGuildsAsync(request, cancellationToken).ConfigureAwait(false),
                 "channels" when IsGet(request) => await GetChannelsAsync(request, null, cancellationToken).ConfigureAwait(false),
@@ -154,7 +134,10 @@ public sealed class DiscordModuleBridge(
             expiresAtUtc = token?.ExpiresAtUtc,
             updatedAtUtc = token?.UpdatedAtUtc,
             hasRefreshToken = !string.IsNullOrWhiteSpace(token?.RefreshToken),
-            metadata = token?.Metadata
+            metadata = token?.Metadata,
+            configuredGuildName = moduleOptions.GuildName,
+            configuredGuildBotInstalled = moduleOptions.GuildBotInstalled,
+            configuredGuildIconUrl = moduleOptions.GuildIconUrl
         };
     }
 
@@ -215,6 +198,37 @@ public sealed class DiscordModuleBridge(
         return ModuleApiResponse.Json(new { success = true });
     }
 
+    private ModuleApiResponse OpenBotInstall(ModuleApiRequest request)
+    {
+        var moduleOptions = GetOptions();
+        var dryRun = ParseBooleanQuery(request, "dryRun");
+        var clientId = moduleOptions.ClientId?.Trim();
+        if (dryRun && !string.IsNullOrWhiteSpace(QueryValue(request, "clientId")))
+            clientId = QueryValue(request, "clientId")!.Trim();
+
+        if (string.IsNullOrWhiteSpace(clientId))
+            return Error("Configure Discord client ID before installing the bot.", 400);
+
+        var guildId = NormalizeSnowflake(QueryValue(request, "guildId")) ?? NormalizeSnowflake(moduleOptions.GuildId);
+        var installUrl = BuildBotInstallUrl(clientId, guildId);
+        if (!dryRun)
+            LaunchBrowser(installUrl, moduleOptions.AuthBrowserPath);
+
+        var message = dryRun
+            ? "Generated Discord bot install prompt URL."
+            : string.IsNullOrWhiteSpace(guildId)
+            ? "Opened Discord bot install prompt. Choose a server in Discord, then refresh servers here."
+            : "Opened Discord bot install prompt for the selected server. After approving it, refresh servers here.";
+
+        return ModuleApiResponse.Json(new
+        {
+            success = true,
+            message,
+            installUrl,
+            guildId
+        });
+    }
+
     private async Task<ModuleApiResponse> GetGuildsAsync(ModuleApiRequest request, CancellationToken cancellationToken)
     {
         var moduleOptions = GetOptions();
@@ -224,6 +238,9 @@ public sealed class DiscordModuleBridge(
         var cacheKey = BuildDiscordDirectoryCacheKey(
             "guilds",
             configuredGuildId,
+            moduleOptions.GuildName,
+            moduleOptions.GuildBotInstalled?.ToString(),
+            moduleOptions.GuildIconUrl,
             botToken,
             storedToken?.Scope,
             storedToken?.UpdatedAtUtc?.ToString("O"));
@@ -246,7 +263,7 @@ public sealed class DiscordModuleBridge(
                 ? await GetUserGuildsAsync(moduleOptions, timeoutCts.Token).ConfigureAwait(false)
                 : Array.Empty<DiscordGuildSummary>();
 
-            var botGuilds = await GetBotGuildsAsync(botToken, timeoutCts.Token).ConfigureAwait(false);
+            var botGuildsResult = await GetBotGuildsAsync(botToken, timeoutCts.Token).ConfigureAwait(false);
             var map = new Dictionary<string, GuildListing>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var guild in userGuilds)
@@ -263,11 +280,12 @@ public sealed class DiscordModuleBridge(
                     Owner = guild?.Owner ?? false,
                     Permissions = guild?.Permissions,
                     BotInstalled = false,
+                    BotInstallKnown = botGuildsResult.Checked,
                     Source = "user"
                 };
             }
 
-            foreach (var guild in botGuilds)
+            foreach (var guild in botGuildsResult.Guilds)
             {
                 var id = NormalizeSnowflake(guild?.Id);
                 if (string.IsNullOrWhiteSpace(id))
@@ -282,6 +300,7 @@ public sealed class DiscordModuleBridge(
                         IconUrl = BuildGuildIconUrl(id, guild?.Icon),
                         Owner = guild?.Owner ?? false,
                         Permissions = guild?.Permissions,
+                        BotInstallKnown = true,
                         Source = "bot"
                     };
                 }
@@ -295,7 +314,25 @@ public sealed class DiscordModuleBridge(
                 }
 
                 existing.BotInstalled = true;
+                existing.BotInstallKnown = true;
                 map[id] = existing;
+            }
+
+            if (!string.IsNullOrWhiteSpace(configuredGuildId) && !map.ContainsKey(configuredGuildId))
+            {
+                var botInstalled = botGuildsResult.Checked
+                    ? false
+                    : moduleOptions.GuildBotInstalled == true;
+
+                map[configuredGuildId] = new GuildListing
+                {
+                    Id = configuredGuildId,
+                    Name = FirstNonEmpty(moduleOptions.GuildName, $"Server {configuredGuildId}")!,
+                    IconUrl = moduleOptions.GuildIconUrl,
+                    BotInstalled = botInstalled,
+                    BotInstallKnown = botGuildsResult.Checked || moduleOptions.GuildBotInstalled.HasValue,
+                    Source = "configured"
+                };
             }
 
             var guilds = map.Values
@@ -309,6 +346,7 @@ public sealed class DiscordModuleBridge(
                     owner = g.Owner,
                     permissions = g.Permissions,
                     botInstalled = g.BotInstalled,
+                    botInstallKnown = g.BotInstallKnown,
                     source = g.Source,
                     selected = !string.IsNullOrWhiteSpace(configuredGuildId)
                                && string.Equals(configuredGuildId, g.Id, StringComparison.OrdinalIgnoreCase)
@@ -320,8 +358,13 @@ public sealed class DiscordModuleBridge(
                 connected,
                 hasGuildScope,
                 configuredGuildId,
+                configuredGuildName = moduleOptions.GuildName,
+                configuredGuildBotInstalled = moduleOptions.GuildBotInstalled,
+                configuredGuildIconUrl = moduleOptions.GuildIconUrl,
+                botGuildsChecked = botGuildsResult.Checked,
+                botGuildsError = botGuildsResult.Error,
                 guilds,
-                message = BuildGuildsMessage(connected, hasGuildScope, botToken, guilds.Length),
+                message = BuildGuildsMessage(connected, hasGuildScope, botToken, guilds.Length, botGuildsResult.Checked, botGuildsResult.Error),
                 checkedAtUtc = DateTime.UtcNow,
                 fromCache = false
             };
@@ -339,6 +382,11 @@ public sealed class DiscordModuleBridge(
                 connected = false,
                 hasGuildScope = false,
                 configuredGuildId,
+                configuredGuildName = moduleOptions.GuildName,
+                configuredGuildBotInstalled = moduleOptions.GuildBotInstalled,
+                configuredGuildIconUrl = moduleOptions.GuildIconUrl,
+                botGuildsChecked = false,
+                botGuildsError = "Discord server list timed out.",
                 guilds = Array.Empty<object>(),
                 message = "Discord server list timed out. Try refresh again.",
                 checkedAtUtc = DateTime.UtcNow,
@@ -548,28 +596,14 @@ public sealed class DiscordModuleBridge(
     private DiscordModuleOptions GetOptions()
     {
         var moduleOptions = _options.Get(ModuleId, DiscordModuleOptions.CreateDefault());
-        var legacy = _configuration is null
-            ? DiscordModuleOptions.CreateDefault()
-            : DiscordModuleOptions.FromLegacy(_configuration.GetOrLoad().Discord);
-        return moduleOptions.MergeFallback(legacy);
+        return moduleOptions.MergeFallback(DiscordModuleOptions.CreateDefault());
     }
 
     private string? GetBotToken(DiscordModuleOptions options)
     {
         var configured = options.BotToken?.Trim();
         if (!string.IsNullOrWhiteSpace(configured))
-        {
-            _tokenStore.Set(BotTokenKey, new IntegrationToken
-            {
-                AccessToken = configured,
-                TokenType = "Bot",
-                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["source"] = "module-config"
-                }
-            });
             return configured;
-        }
 
         return _tokenStore.Get(BotTokenKey)?.AccessToken?.Trim();
     }
@@ -684,6 +718,20 @@ public sealed class DiscordModuleBridge(
             ["scope"] = scope,
             ["state"] = state,
             ["prompt"] = "consent"
+        });
+
+        return new UriBuilder(AuthorizeEndpoint) { Query = query }.Uri.ToString();
+    }
+
+    private static string BuildBotInstallUrl(string clientId, string? guildId)
+    {
+        var query = QueryStringBuilder.Build(new Dictionary<string, string?>
+        {
+            ["client_id"] = clientId,
+            ["scope"] = "bot applications.commands",
+            ["permissions"] = DefaultBotInstallPermissions,
+            ["guild_id"] = guildId,
+            ["disable_guild_select"] = string.IsNullOrWhiteSpace(guildId) ? null : "true"
         });
 
         return new UriBuilder(AuthorizeEndpoint) { Query = query }.Uri.ToString();
@@ -814,20 +862,23 @@ public sealed class DiscordModuleBridge(
         }
     }
 
-    private static async Task<IReadOnlyList<DiscordRestClient.DiscordGuildResponse>> GetBotGuildsAsync(string? botToken, CancellationToken cancellationToken)
+    private static async Task<BotGuildsResult> GetBotGuildsAsync(string? botToken, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(botToken))
-            return Array.Empty<DiscordRestClient.DiscordGuildResponse>();
+            return new BotGuildsResult(Array.Empty<DiscordRestClient.DiscordGuildResponse>(), false, null);
 
         try
         {
             var client = new DiscordRestClient(botToken);
             var guilds = await client.GetCurrentUserGuildsAsync(cancellationToken).ConfigureAwait(false);
-            return guilds is null ? Array.Empty<DiscordRestClient.DiscordGuildResponse>() : guilds;
+            return guilds is null
+                ? new BotGuildsResult(Array.Empty<DiscordRestClient.DiscordGuildResponse>(), false, "Discord rejected the configured bot token or guild request.")
+                : new BotGuildsResult(guilds, true, null);
         }
-        catch
+        catch (Exception ex)
         {
-            return Array.Empty<DiscordRestClient.DiscordGuildResponse>();
+            Trace.WriteLine($"Failed to load Discord bot guilds: {ex.Message}");
+            return new BotGuildsResult(Array.Empty<DiscordRestClient.DiscordGuildResponse>(), false, ex.Message);
         }
     }
 
@@ -1047,7 +1098,13 @@ public sealed class DiscordModuleBridge(
             ? null
             : $"https://cdn.discordapp.com/icons/{Uri.EscapeDataString(guildId.Trim())}/{Uri.EscapeDataString(iconHash.Trim())}.png?size=64";
 
-    private static string? BuildGuildsMessage(bool connected, bool hasGuildScope, string? botToken, int guildCount)
+    private static string? BuildGuildsMessage(
+        bool connected,
+        bool hasGuildScope,
+        string? botToken,
+        int guildCount,
+        bool botGuildsChecked,
+        string? botGuildsError)
     {
         if (!connected)
             return "Connect Discord to browse account servers.";
@@ -1055,10 +1112,17 @@ public sealed class DiscordModuleBridge(
             return "Add the 'guilds' scope and reconnect Discord to browse account servers.";
         if (string.IsNullOrWhiteSpace(botToken))
             return "Set a Discord bot token to mark bot-enabled servers and load channels.";
+        if (!botGuildsChecked)
+            return string.IsNullOrWhiteSpace(botGuildsError)
+                ? "Could not verify which servers already have the bot installed. Check the bot token and refresh servers."
+                : $"Could not verify which servers already have the bot installed: {botGuildsError}";
         if (guildCount == 0)
-            return "No Discord servers found for the connected account.";
+            return "No Discord servers found for the connected account or configured bot token.";
         return null;
     }
+
+    private static string? FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value))?.Trim();
 
     private static string BuildAvatarUrl(string userId, string avatarHash)
     {
@@ -1084,7 +1148,7 @@ public sealed class DiscordModuleBridge(
 
         try
         {
-            var normalizedBrowser = string.IsNullOrWhiteSpace(browserPath) || browserPath.Equals(AppConfiguration.SystemBrowserSentinel, StringComparison.OrdinalIgnoreCase)
+            var normalizedBrowser = string.IsNullOrWhiteSpace(browserPath) || browserPath.Equals(SystemBrowserSentinel, StringComparison.OrdinalIgnoreCase)
                 ? null
                 : browserPath.Trim();
 
@@ -1241,8 +1305,14 @@ public sealed class DiscordModuleBridge(
         public bool Owner { get; set; }
         public string? Permissions { get; set; }
         public bool BotInstalled { get; set; }
+        public bool BotInstallKnown { get; set; }
         public string Source { get; set; } = "user";
     }
+
+    private sealed record BotGuildsResult(
+        IReadOnlyList<DiscordRestClient.DiscordGuildResponse> Guilds,
+        bool Checked,
+        string? Error);
 
     private sealed record CachedDirectoryPayload(string Key, DateTime CreatedUtc, object Payload);
 

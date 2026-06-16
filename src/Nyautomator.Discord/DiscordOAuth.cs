@@ -16,6 +16,7 @@ public static class DiscordOAuth
 {
     public const string TokenKey = "discord";
     public const string DefaultRedirectUri = "http://localhost:8086/discord/callback";
+    private const string SystemBrowserSentinel = "__system__";
     private const string ApiBase = "https://discord.com/api/v10";
     private static readonly Uri AuthorizeEndpoint = new("https://discord.com/oauth2/authorize");
     private static readonly Uri TokenEndpoint = new($"{ApiBase}/oauth2/token");
@@ -46,33 +47,35 @@ public static class DiscordOAuth
 
     public static void ClearToken() => IntegrationTokenStore.Clear(TokenKey);
 
-    public static async Task<DiscordOAuthResult> AuthorizeAsync(AppConfiguration config, CancellationToken cancellationToken = default)
+    public static async Task<DiscordOAuthResult> AuthorizeAsync(
+        string? clientId,
+        string? clientSecret,
+        string? redirectUri = null,
+        IEnumerable<string>? scopes = null,
+        string? browserPath = null,
+        CancellationToken cancellationToken = default)
     {
-        if (config is null)
-            throw new ArgumentNullException(nameof(config));
-
-        var options = config.Discord ?? new AppConfiguration.DiscordOptions();
-        var clientId = options.ClientId?.Trim();
-        var clientSecret = options.ClientSecret?.Trim();
-        var redirect = string.IsNullOrWhiteSpace(options.RedirectUri)
+        clientId = clientId?.Trim();
+        clientSecret = clientSecret?.Trim();
+        var redirect = string.IsNullOrWhiteSpace(redirectUri)
             ? DefaultRedirectUri
-            : options.RedirectUri.Trim();
+            : redirectUri.Trim();
 
         if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
             return DiscordOAuthResult.CreateFailure("Configure Discord client ID and client secret before starting OAuth.");
 
-        if (!Uri.TryCreate(redirect, UriKind.Absolute, out var redirectUri))
+        if (!Uri.TryCreate(redirect, UriKind.Absolute, out var parsedRedirectUri))
             return DiscordOAuthResult.CreateFailure("Discord redirect URI must be an absolute URI.");
 
-        var scopeList = NormalizeScopes(options.Scopes);
+        var scopeList = NormalizeScopes(scopes);
         var scopeParam = scopeList.Length > 0 ? string.Join(' ', scopeList) : "identify";
         var state = Guid.NewGuid().ToString("n");
 
-        var authUrl = BuildAuthorizeUrl(clientId, redirectUri, scopeParam, state);
-        LaunchBrowser(authUrl);
+        var authUrl = BuildAuthorizeUrl(clientId, parsedRedirectUri, scopeParam, state);
+        LaunchBrowser(authUrl, browserPath);
 
         var callback = await OAuthCallbackListener
-            .WaitForCodeAsync(redirectUri, state, AuthorizationTimeout, cancellationToken)
+            .WaitForCodeAsync(parsedRedirectUri, state, AuthorizationTimeout, cancellationToken)
             .ConfigureAwait(false);
 
         if (callback.TimedOut)
@@ -89,7 +92,7 @@ public static class DiscordOAuth
         if (string.IsNullOrEmpty(callback.Code))
             return DiscordOAuthResult.CreateFailure("Discord did not return an authorization code.");
 
-        var token = await ExchangeCodeAsync(clientId, clientSecret, redirectUri.ToString(), callback.Code, scopeParam, cancellationToken)
+        var token = await ExchangeCodeAsync(clientId, clientSecret, parsedRedirectUri.ToString(), callback.Code, scopeParam, cancellationToken)
             .ConfigureAwait(false);
         if (token is null)
             return DiscordOAuthResult.CreateFailure("Unable to exchange the authorization code for Discord tokens.");
@@ -100,16 +103,17 @@ public static class DiscordOAuth
         return DiscordOAuthResult.CreateSuccess(token.Clone());
     }
 
-    public static async Task<bool> RefreshAccessTokenAsync(CancellationToken cancellationToken = default)
+    public static async Task<bool> RefreshAccessTokenAsync(
+        string? clientId,
+        string? clientSecret,
+        CancellationToken cancellationToken = default)
     {
         var token = IntegrationTokenStore.Get(TokenKey);
         if (token is null || string.IsNullOrWhiteSpace(token.RefreshToken))
             return false;
 
-        var config = ConfigurationProvider.GetOrLoadAppConfig();
-        var options = config?.Discord ?? new AppConfiguration.DiscordOptions();
-        var clientId = options.ClientId?.Trim();
-        var clientSecret = options.ClientSecret?.Trim();
+        clientId = clientId?.Trim();
+        clientSecret = clientSecret?.Trim();
         if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
             return false;
 
@@ -158,7 +162,10 @@ public static class DiscordOAuth
         }
     }
 
-    public static async Task<IntegrationToken?> GetValidTokenAsync(CancellationToken cancellationToken = default)
+    public static async Task<IntegrationToken?> GetValidTokenAsync(
+        string? clientId,
+        string? clientSecret,
+        CancellationToken cancellationToken = default)
     {
         var token = IntegrationTokenStore.Get(TokenKey);
         if (token is null || string.IsNullOrWhiteSpace(token.AccessToken))
@@ -166,7 +173,7 @@ public static class DiscordOAuth
 
         if (ShouldRefreshToken(token))
         {
-            var refreshed = await RefreshAccessTokenAsync(cancellationToken).ConfigureAwait(false);
+            var refreshed = await RefreshAccessTokenAsync(clientId, clientSecret, cancellationToken).ConfigureAwait(false);
             if (refreshed)
                 token = IntegrationTokenStore.Get(TokenKey) ?? token;
         }
@@ -174,9 +181,12 @@ public static class DiscordOAuth
         return string.IsNullOrWhiteSpace(token.AccessToken) ? null : token;
     }
 
-    public static async Task<IReadOnlyList<DiscordGuildSummary>> GetUserGuildsAsync(CancellationToken cancellationToken = default)
+    public static async Task<IReadOnlyList<DiscordGuildSummary>> GetUserGuildsAsync(
+        string? clientId,
+        string? clientSecret,
+        CancellationToken cancellationToken = default)
     {
-        var token = await GetValidTokenAsync(cancellationToken).ConfigureAwait(false);
+        var token = await GetValidTokenAsync(clientId, clientSecret, cancellationToken).ConfigureAwait(false);
         if (token is null || string.IsNullOrWhiteSpace(token.AccessToken))
             return Array.Empty<DiscordGuildSummary>();
 
@@ -411,18 +421,19 @@ public static class DiscordOAuth
         return list.ToArray();
     }
 
-    private static void LaunchBrowser(string url)
+    private static void LaunchBrowser(string url, string? browserPath)
     {
         if (string.IsNullOrWhiteSpace(url))
             return;
 
         try
         {
-            var psi = new ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true
-            };
+            var normalizedBrowser = string.IsNullOrWhiteSpace(browserPath) || browserPath.Equals(SystemBrowserSentinel, StringComparison.OrdinalIgnoreCase)
+                ? null
+                : browserPath.Trim();
+            var psi = string.IsNullOrWhiteSpace(normalizedBrowser)
+                ? new ProcessStartInfo { FileName = url, UseShellExecute = true }
+                : new ProcessStartInfo { FileName = normalizedBrowser, Arguments = url, UseShellExecute = false };
             Process.Start(psi);
         }
         catch (Exception ex)

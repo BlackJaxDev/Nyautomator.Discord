@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Discord Dashboard</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #11151c;
+      --surface: #171c25;
+      --surface-strong: #1d2430;
+      --border: #2a3343;
+      --border-strong: #3a8dbe;
+      --text: #e8edf5;
+      --subtext: #aab6c8;
+      --muted: #7f8ca3;
+      --accent: #38bdf8;
+      --accent-strong: #22a8e8;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --discord: #5865f2;
+      --button-bg: #0d1117;
+      --button-hover: #182030;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: transparent;
+      color: var(--text);
+      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    .discord-dashboard {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .account-panel,
+    .message-panel {
+      display: grid;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(17, 21, 28, 0.62);
+    }
+
+    .account-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .account-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .avatar {
+      position: relative;
+      width: 48px;
+      height: 48px;
+      flex: 0 0 48px;
+      overflow: hidden;
+      border: 1px solid color-mix(in srgb, var(--discord) 55%, var(--border));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--discord) 22%, var(--surface));
+      box-shadow: 0 0 16px color-mix(in srgb, var(--discord) 40%, transparent);
+    }
+
+    .avatar img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .avatar-fallback {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: white;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .avatar img:not([hidden]) + .avatar-fallback {
+      display: none;
+    }
+
+    .account-copy {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+
+    .account-name {
+      overflow: hidden;
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 800;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .account-detail {
+      overflow: hidden;
+      color: var(--subtext);
+      font-size: 0.86rem;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 1px solid color-mix(in srgb, var(--badge-color), transparent 58%);
+      border-radius: 999px;
+      color: var(--badge-color);
+      background: color-mix(in srgb, var(--badge-color), transparent 86%);
+      font-size: 0.8rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: currentColor;
+    }
+
+    .badge.success {
+      --badge-color: var(--success);
+    }
+
+    .badge.warning {
+      --badge-color: var(--warning);
+    }
+
+    .badge.error {
+      --badge-color: var(--danger);
+    }
+
+    .badge.neutral {
+      --badge-color: var(--muted);
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .status-item {
+      min-width: 0;
+      padding: 8px 10px;
+      border: 1px solid color-mix(in srgb, var(--border), transparent 12%);
+      border-radius: 7px;
+      background: rgba(148, 163, 184, 0.045);
+    }
+
+    .status-label {
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .status-value {
+      overflow: hidden;
+      margin-top: 2px;
+      color: var(--text);
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .actions,
+    .message-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .btn {
+      min-height: 34px;
+      padding: 7px 12px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text);
+      background: var(--button-bg);
+      font-weight: 800;
+      cursor: pointer;
+      transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+    }
+
+    .btn:hover:not(:disabled) {
+      border-color: color-mix(in srgb, var(--accent), var(--border) 30%);
+      background: var(--button-hover);
+    }
+
+    .btn.primary {
+      border-color: color-mix(in srgb, var(--accent), var(--border) 20%);
+      background: color-mix(in srgb, var(--accent), #08111a 78%);
+      color: #eaf8ff;
+    }
+
+    .btn.warning {
+      border-color: color-mix(in srgb, var(--warning), var(--border) 25%);
+      color: #ffe9b6;
+    }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.52;
+    }
+
+    .message-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .panel-title {
+      margin: 0;
+      color: var(--text);
+      font-size: 0.94rem;
+      font-weight: 850;
+    }
+
+    .panel-subtitle {
+      color: var(--subtext);
+      font-size: 0.8rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .label {
+      color: #b7c7e3;
+      font-size: 0.74rem;
+      font-weight: 850;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .select,
+    .textarea {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text);
+      background: #0d1117;
+      outline: none;
+    }
+
+    .select {
+      min-height: 38px;
+      padding: 7px 10px;
+    }
+
+    .textarea {
+      min-height: 82px;
+      max-height: 180px;
+      padding: 10px;
+      resize: vertical;
+    }
+
+    .select:focus,
+    .textarea:focus {
+      border-color: var(--border-strong);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.14);
+    }
+
+    .field-note,
+    .counter {
+      color: var(--subtext);
+      font-size: 0.78rem;
+    }
+
+    .counter {
+      margin-left: auto;
+    }
+
+    .notice {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 9px 10px;
+      border: 1px solid rgba(56, 189, 248, 0.24);
+      border-radius: 7px;
+      color: var(--subtext);
+      background: rgba(56, 189, 248, 0.08);
+      font-size: 0.84rem;
+    }
+
+    .notice[hidden] {
+      display: none;
+    }
+
+    .notice.success {
+      border-color: rgba(34, 197, 94, 0.34);
+      color: var(--text);
+      background: rgba(34, 197, 94, 0.08);
+    }
+
+    .notice.error {
+      border-color: rgba(239, 68, 68, 0.36);
+      color: var(--text);
+      background: rgba(239, 68, 68, 0.08);
+    }
+
+    .notice.warning {
+      border-color: rgba(245, 158, 11, 0.34);
+      color: var(--text);
+      background: rgba(245, 158, 11, 0.08);
+    }
+
+    @media (max-width: 520px) {
+      .account-head,
+      .message-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .status-grid,
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .actions .btn,
+      .message-actions .btn {
+        flex: 1 1 100%;
+      }
+
+      .panel-subtitle {
+        white-space: normal;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="discord-dashboard">
+    <section class="account-panel" aria-label="Discord account status">
+      <div class="account-head">
+        <div class="account-main">
+          <div class="avatar" aria-hidden="true">
+            <img id="account-avatar" alt="" hidden>
+            <span id="account-initials" class="avatar-fallback">DC</span>
+          </div>
+          <div class="account-copy">
+            <div id="account-name" class="account-name">Loading Discord</div>
+            <div id="account-detail" class="account-detail">Checking account status...</div>
+          </div>
+        </div>
+        <span id="status-badge" class="badge neutral">Loading</span>
+      </div>
+
+      <div id="status-grid" class="status-grid"></div>
+      <div id="account-notice" class="notice" hidden></div>
+
+      <div class="actions">
+        <button id="refresh" type="button" class="btn">Refresh</button>
+        <button id="connect" type="button" class="btn">Connect</button>
+        <button id="disconnect" type="button" class="btn">Disconnect</button>
+      </div>
+    </section>
+
+    <section class="message-panel" aria-label="Discord bot message">
+      <div class="message-head">
+        <h4 class="panel-title">Bot Message</h4>
+        <span id="bot-state" class="panel-subtitle">Checking bot token...</span>
+      </div>
+
+      <div class="form-grid">
+        <label class="field" for="guild-select">
+          <span class="label">Server</span>
+          <select id="guild-select" class="select" disabled>
+            <option value="">Loading servers...</option>
+          </select>
+          <span id="guild-note" class="field-note"></span>
+        </label>
+
+        <label class="field" for="channel-select">
+          <span class="label">Channel</span>
+          <select id="channel-select" class="select" disabled>
+            <option value="">Select a server first</option>
+          </select>
+          <span id="channel-note" class="field-note"></span>
+        </label>
+      </div>
+
+      <label class="field" for="message-content">
+        <span class="label">Message</span>
+        <textarea id="message-content" class="textarea" maxlength="2000" placeholder="Write a bot message..."></textarea>
+      </label>
+
+      <div class="message-actions">
+        <button id="install-bot" type="button" class="btn warning" hidden>Install bot in server</button>
+        <button id="refresh-channels" type="button" class="btn">Refresh channels</button>
+        <button id="send-message" type="button" class="btn primary" disabled>Send as bot</button>
+        <span id="message-counter" class="counter">0 / 2000</span>
+      </div>
+
+      <div id="message-notice" class="notice" hidden aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script>
+    const moduleId = 'discord';
+    const assetPath = 'dashboard/dashboard.html';
+    const storagePrefix = 'nyautomator.discord.dashboard.';
+    const state = {
+      busy: false,
+      status: null,
+      guilds: [],
+      channels: [],
+      guildMessage: '',
+      channelMessage: '',
+      selectedGuildId: localStorage.getItem(storagePrefix + 'guildId') || '',
+      selectedChannelId: localStorage.getItem(storagePrefix + 'channelId') || ''
+    };
+
+    const elements = {
+      avatar: document.getElementById('account-avatar'),
+      initials: document.getElementById('account-initials'),
+      accountName: document.getElementById('account-name'),
+      accountDetail: document.getElementById('account-detail'),
+      statusBadge: document.getElementById('status-badge'),
+      statusGrid: document.getElementById('status-grid'),
+      accountNotice: document.getElementById('account-notice'),
+      refresh: document.getElementById('refresh'),
+      connect: document.getElementById('connect'),
+      disconnect: document.getElementById('disconnect'),
+      botState: document.getElementById('bot-state'),
+      guildSelect: document.getElementById('guild-select'),
+      guildNote: document.getElementById('guild-note'),
+      channelSelect: document.getElementById('channel-select'),
+      channelNote: document.getElementById('channel-note'),
+      messageContent: document.getElementById('message-content'),
+      messageCounter: document.getElementById('message-counter'),
+      installBot: document.getElementById('install-bot'),
+      refreshChannels: document.getElementById('refresh-channels'),
+      sendMessage: document.getElementById('send-message'),
+      messageNotice: document.getElementById('message-notice')
+    };
+
+    function api(path) {
+      return `/modules/discord/api/${String(path || '').replace(/^\/+/, '')}`;
+    }
+
+    function postHeight() {
+      const height = Math.max(
+        document.documentElement.scrollHeight,
+        document.body.scrollHeight,
+        document.body.offsetHeight
+      );
+      window.parent?.postMessage({ type: 'nyautomator:module-frame-height', moduleId, assetPath, height }, window.location.origin);
+    }
+
+    function postActivity(message) {
+      window.parent?.postMessage({ type: 'nyautomator:module-dashboard-activity', moduleId, assetPath, message }, window.location.origin);
+    }
+
+    async function fetchJson(url, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      const init = { cache: 'no-store', ...options, headers };
+      if (init.body && !headers['Content-Type'])
+        headers['Content-Type'] = 'application/json';
+
+      const response = await fetch(url, init);
+      const text = await response.text();
+      let payload = {};
+      if (text) {
+        try {
+          payload = JSON.parse(text);
+        } catch {
+          payload = { message: text };
+        }
+      }
+
+      if (!response.ok || payload?.success === false || payload?.ok === false) {
+        throw new Error(payload?.error || payload?.message || `Request failed (${response.status}).`);
+      }
+
+      return payload;
+    }
+
+    function setBusy(nextBusy) {
+      state.busy = nextBusy;
+      renderControls();
+    }
+
+    function setNotice(element, message, tone = '') {
+      element.textContent = message || '';
+      element.className = ['notice', tone].filter(Boolean).join(' ');
+      element.hidden = !message;
+      postHeight();
+    }
+
+    function clearNotice(element) {
+      setNotice(element, '');
+    }
+
+    function formatDate(value) {
+      if (!value)
+        return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date.toLocaleString();
+    }
+
+    function initialsFor(value) {
+      const text = String(value || '').trim();
+      if (!text)
+        return 'DC';
+      const parts = text.split(/\s+/).filter(Boolean);
+      if (parts.length > 1)
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+      return text.slice(0, 2).toUpperCase();
+    }
+
+    function accountName(status) {
+      const account = status?.account || {};
+      const metadata = status?.metadata || {};
+      return account.displayName || metadata.globalName || account.login || metadata.username || account.id || 'Discord account';
+    }
+
+    function accountHandle(status) {
+      const account = status?.account || {};
+      const metadata = status?.metadata || {};
+      return account.login || metadata.username || '';
+    }
+
+    function selectedGuild() {
+      return state.guilds.find(guild => String(guild.id) === String(state.selectedGuildId)) || null;
+    }
+
+    function guildInstallSuffix(guild) {
+      if (!guild || guild.botInstalled === true) return '';
+      return guild.botInstallKnown === false
+        ? ' (bot install unknown)'
+        : ' (bot not installed)';
+    }
+
+    function guildInstallMessage(guild) {
+      if (!guild)
+        return 'Connect Discord or configure a bot token to load servers.';
+      if (guild.botInstalled === true)
+        return 'Bot is installed in this server.';
+      return guild.botInstallKnown === false
+        ? 'Bot install status could not be verified. Try loading channels or install/update permissions.'
+        : 'Bot is not installed in this server yet.';
+    }
+
+    function guildKnownNotInstalled(guild) {
+      return !!guild && guild.botInstallKnown !== false && guild.botInstalled !== true;
+    }
+
+    function selectedChannel() {
+      return state.channels.find(channel => String(channel.id) === String(state.selectedChannelId)) || null;
+    }
+
+    function statusRows(status) {
+      const account = status?.account || {};
+      const scopes = Array.isArray(status?.scopes) ? status.scopes : [];
+      return [
+        ['User ID', account.id],
+        ['Username', accountHandle(status) ? `@${accountHandle(status)}` : null],
+        ['Bot token', status?.botConfigured ? 'Configured' : 'Not configured'],
+        ['Scopes', scopes.length ? scopes.join(' ') : null],
+        ['Updated', formatDate(status?.updatedAtUtc)]
+      ].filter(([, value]) => value);
+    }
+
+    function renderStatus() {
+      const status = state.status || {};
+      const connected = !!status.connected;
+      const configured = !!status.configured;
+      const name = connected ? accountName(status) : configured ? 'Discord not connected' : 'Discord needs setup';
+      const handle = accountHandle(status);
+      const account = status.account || {};
+      const metadata = status.metadata || {};
+      const avatarUrl = metadata.avatarUrl;
+
+      elements.accountName.textContent = name;
+      elements.accountDetail.textContent = connected
+        ? [handle ? `@${handle}` : null, account.id ? `ID ${account.id}` : null].filter(Boolean).join('  ')
+        : configured ? 'Connect an account to show Discord user details.' : 'Add Discord OAuth credentials in Settings.';
+
+      elements.initials.textContent = initialsFor(name);
+      if (connected && avatarUrl) {
+        elements.avatar.src = avatarUrl;
+        elements.avatar.hidden = false;
+      } else {
+        elements.avatar.removeAttribute('src');
+        elements.avatar.hidden = true;
+      }
+
+      elements.statusBadge.className = connected
+        ? 'badge success'
+        : configured ? 'badge neutral' : 'badge warning';
+      elements.statusBadge.textContent = connected ? 'Connected' : configured ? 'Disconnected' : 'Setup';
+
+      elements.statusGrid.innerHTML = '';
+      for (const [label, value] of statusRows(status)) {
+        const item = document.createElement('div');
+        item.className = 'status-item';
+        const labelEl = document.createElement('div');
+        labelEl.className = 'status-label';
+        labelEl.textContent = label;
+        const valueEl = document.createElement('div');
+        valueEl.className = 'status-value';
+        valueEl.textContent = value;
+        item.append(labelEl, valueEl);
+        elements.statusGrid.appendChild(item);
+      }
+
+      const scopes = Array.isArray(status.scopes) ? status.scopes : [];
+      const hasGuildScope = scopes.some(scope => String(scope).toLowerCase() === 'guilds');
+      if (connected && !hasGuildScope) {
+        setNotice(elements.accountNotice, "Reconnect with the guilds scope to browse account servers.", 'warning');
+      } else if (!connected && configured) {
+        setNotice(elements.accountNotice, 'Connect Discord to show the logged-in user and account servers.', 'warning');
+      } else if (!configured) {
+        setNotice(elements.accountNotice, 'Discord OAuth client ID and client secret are not configured yet.', 'warning');
+      } else {
+        clearNotice(elements.accountNotice);
+      }
+
+      elements.botState.textContent = status.botConfigured
+        ? 'Bot token configured'
+        : 'Set a bot token in Settings to send messages';
+
+      renderControls();
+      postHeight();
+    }
+
+    function renderGuilds() {
+      const configuredGuildId = state.status?.configuredGuildId;
+      if (!state.selectedGuildId) {
+        const configured = configuredGuildId && state.guilds.find(guild => String(guild.id) === String(configuredGuildId));
+        const botGuild = state.guilds.find(guild => guild.botInstalled);
+        const first = configured || botGuild || state.guilds[0];
+        state.selectedGuildId = first?.id || '';
+      }
+
+      elements.guildSelect.innerHTML = '';
+      if (state.guilds.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No servers available';
+        elements.guildSelect.appendChild(option);
+      } else {
+        for (const guild of state.guilds) {
+          const option = document.createElement('option');
+          option.value = guild.id;
+          option.textContent = `${guild.name || guild.id}${guildInstallSuffix(guild)}`;
+          elements.guildSelect.appendChild(option);
+        }
+      }
+
+      if (state.selectedGuildId && state.guilds.some(guild => String(guild.id) === String(state.selectedGuildId)))
+        elements.guildSelect.value = state.selectedGuildId;
+      else
+        state.selectedGuildId = elements.guildSelect.value || '';
+
+      localStorage.setItem(storagePrefix + 'guildId', state.selectedGuildId || '');
+
+      const guild = selectedGuild();
+      elements.guildNote.textContent = state.guildMessage || guildInstallMessage(guild);
+      elements.installBot.hidden = !guild || !!guild.botInstalled;
+
+      renderControls();
+      postHeight();
+    }
+
+    function renderChannels() {
+      elements.channelSelect.innerHTML = '';
+      if (state.channels.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = state.selectedGuildId ? 'No channels available' : 'Select a server first';
+        elements.channelSelect.appendChild(option);
+      } else {
+        for (const channel of state.channels) {
+          const option = document.createElement('option');
+          option.value = channel.id;
+          option.textContent = channel.displayName || channel.name || channel.id;
+          elements.channelSelect.appendChild(option);
+        }
+      }
+
+      if (!state.channels.some(channel => String(channel.id) === String(state.selectedChannelId))) {
+        const storedForGuild = localStorage.getItem(storagePrefix + 'channelId.' + state.selectedGuildId);
+        state.selectedChannelId = state.channels.some(channel => String(channel.id) === String(storedForGuild))
+          ? storedForGuild
+          : state.channels[0]?.id || '';
+      }
+
+      if (state.selectedChannelId)
+        elements.channelSelect.value = state.selectedChannelId;
+
+      if (state.selectedGuildId)
+        localStorage.setItem(storagePrefix + 'channelId.' + state.selectedGuildId, state.selectedChannelId || '');
+      localStorage.setItem(storagePrefix + 'channelId', state.selectedChannelId || '');
+
+      elements.channelNote.textContent = state.channelMessage || (selectedChannel()
+        ? `Selected ${selectedChannel().displayName || selectedChannel().name || selectedChannel().id}.`
+        : 'Load channels after selecting a server.');
+
+      renderControls();
+      postHeight();
+    }
+
+    function renderControls() {
+      const connected = !!state.status?.connected;
+      const configured = !!state.status?.configured;
+      const hasBotToken = !!state.status?.botConfigured;
+      const hasGuild = !!state.selectedGuildId;
+      const guild = selectedGuild();
+      const knownNotInstalled = guildKnownNotInstalled(guild);
+      const hasChannel = !!state.selectedChannelId;
+      const message = elements.messageContent.value.trim();
+
+      elements.refresh.disabled = state.busy;
+      elements.connect.disabled = state.busy || !configured;
+      elements.disconnect.disabled = state.busy || !connected;
+      elements.guildSelect.disabled = state.busy || state.guilds.length === 0;
+      elements.channelSelect.disabled = state.busy || state.channels.length === 0;
+      elements.installBot.disabled = state.busy || !configured || !hasGuild;
+      elements.refreshChannels.disabled = state.busy || !hasGuild || !hasBotToken || knownNotInstalled;
+      elements.sendMessage.disabled = state.busy || !hasBotToken || !hasChannel || !message;
+      elements.sendMessage.textContent = state.busy ? 'Working...' : 'Send as bot';
+      elements.messageCounter.textContent = `${elements.messageContent.value.length} / 2000`;
+    }
+
+    async function loadStatus() {
+      state.status = await fetchJson(api('status'));
+      renderStatus();
+    }
+
+    async function loadGuilds(refresh = false) {
+      const payload = await fetchJson(api(`guilds${refresh ? '?refresh=true' : ''}`));
+      state.guilds = Array.isArray(payload.guilds) ? payload.guilds : [];
+      state.guildMessage = payload.message || '';
+      if (payload.configuredGuildId && !state.selectedGuildId)
+        state.selectedGuildId = payload.configuredGuildId;
+      renderGuilds();
+      await loadChannels(false);
+    }
+
+    async function loadChannels(refresh = false) {
+      state.channels = [];
+      state.channelMessage = '';
+      if (!state.selectedGuildId) {
+        renderChannels();
+        return;
+      }
+
+      if (!state.status?.botConfigured) {
+        state.channelMessage = 'Set a Discord bot token in Settings to load channels.';
+        renderChannels();
+        return;
+      }
+
+      const guild = selectedGuild();
+      if (guildKnownNotInstalled(guild)) {
+        state.channelMessage = 'Install the bot in this server to load channels.';
+        renderChannels();
+        return;
+      }
+
+      const query = new URLSearchParams({ guildId: state.selectedGuildId });
+      if (refresh)
+        query.set('refresh', 'true');
+
+      const payload = await fetchJson(api(`channels?${query.toString()}`));
+      state.channels = Array.isArray(payload.channels) ? payload.channels : [];
+      state.channelMessage = payload.message || '';
+      renderChannels();
+    }
+
+    async function refreshAll(refreshDirectories = false) {
+      setBusy(true);
+      try {
+        clearNotice(elements.messageNotice);
+        await loadStatus();
+        await loadGuilds(refreshDirectories);
+      } catch (error) {
+        setNotice(elements.messageNotice, error.message || String(error), 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function connect() {
+      setBusy(true);
+      try {
+        clearNotice(elements.messageNotice);
+        const payload = await fetchJson(api('authorize'), { method: 'POST' });
+        setNotice(elements.messageNotice, payload.message || 'Discord connected.', 'success');
+        postActivity('Discord connected.');
+        await loadStatus();
+        await loadGuilds(true);
+      } catch (error) {
+        setNotice(elements.messageNotice, error.message || String(error), 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function disconnect() {
+      setBusy(true);
+      try {
+        clearNotice(elements.messageNotice);
+        await fetchJson(api('token'), { method: 'DELETE' });
+        setNotice(elements.messageNotice, 'Discord disconnected.', 'success');
+        postActivity('Discord disconnected.');
+        await loadStatus();
+        await loadGuilds(true);
+      } catch (error) {
+        setNotice(elements.messageNotice, error.message || String(error), 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function installBot() {
+      if (!state.selectedGuildId)
+        return;
+
+      setBusy(true);
+      try {
+        clearNotice(elements.messageNotice);
+        const payload = await fetchJson(api(`bot/install?guildId=${encodeURIComponent(state.selectedGuildId)}`), { method: 'POST' });
+        setNotice(elements.messageNotice, payload.message || 'Opened Discord bot install prompt.', 'success');
+        postActivity('Discord bot install prompt opened.');
+      } catch (error) {
+        setNotice(elements.messageNotice, error.message || String(error), 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function sendMessage() {
+      const content = elements.messageContent.value.trim();
+      if (!state.selectedChannelId || !content)
+        return;
+
+      setBusy(true);
+      try {
+        clearNotice(elements.messageNotice);
+        const channel = selectedChannel();
+        await fetchJson(api('messages'), {
+          method: 'POST',
+          body: JSON.stringify({ channelId: state.selectedChannelId, content })
+        });
+        elements.messageContent.value = '';
+        setNotice(elements.messageNotice, `Sent to ${channel?.displayName || channel?.name || 'selected channel'}.`, 'success');
+        postActivity(`Discord bot message sent to ${channel?.displayName || channel?.name || state.selectedChannelId}.`);
+      } catch (error) {
+        setNotice(elements.messageNotice, error.message || String(error), 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    elements.refresh.addEventListener('click', () => refreshAll(true));
+    elements.connect.addEventListener('click', connect);
+    elements.disconnect.addEventListener('click', disconnect);
+    elements.guildSelect.addEventListener('change', async event => {
+      state.selectedGuildId = event.target.value || '';
+      state.selectedChannelId = '';
+      localStorage.setItem(storagePrefix + 'guildId', state.selectedGuildId);
+      renderGuilds();
+      setBusy(true);
+      try {
+        await loadChannels(false);
+      } catch (error) {
+        state.channels = [];
+        state.channelMessage = error.message || String(error);
+        renderChannels();
+      } finally {
+        setBusy(false);
+      }
+    });
+    elements.channelSelect.addEventListener('change', event => {
+      state.selectedChannelId = event.target.value || '';
+      if (state.selectedGuildId)
+        localStorage.setItem(storagePrefix + 'channelId.' + state.selectedGuildId, state.selectedChannelId);
+      localStorage.setItem(storagePrefix + 'channelId', state.selectedChannelId);
+      renderChannels();
+    });
+    elements.installBot.addEventListener('click', installBot);
+    elements.refreshChannels.addEventListener('click', async () => {
+      setBusy(true);
+      try {
+        await loadChannels(true);
+      } catch (error) {
+        setNotice(elements.messageNotice, error.message || String(error), 'error');
+      } finally {
+        setBusy(false);
+      }
+    });
+    elements.sendMessage.addEventListener('click', sendMessage);
+    elements.messageContent.addEventListener('input', () => {
+      renderControls();
+      postHeight();
+    });
+
+    refreshAll(false).finally(postHeight);
+
+    if ('ResizeObserver' in window)
+      new ResizeObserver(postHeight).observe(document.body);
+    window.addEventListener('load', postHeight);
+  </script>
+</body>
+</html>

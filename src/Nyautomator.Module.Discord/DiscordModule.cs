@@ -35,7 +35,6 @@ public sealed class DiscordModule : INyautomatorModule
         context.Contributions.Register(new ModuleContributionSet(context.ModuleId, Configurations: [configuration]));
 
         var bridge = context.Services.GetService<DiscordModuleBridge>() ?? GetFallbackBridge(context.Services);
-        bridge.MigrateLegacyOptions();
 
         context.ApiHandlers.Register(bridge);
         context.AuthenticatedIntegrations.Register(bridge);
@@ -48,8 +47,7 @@ public sealed class DiscordModule : INyautomatorModule
         {
             _fallbackBridge ??= new DiscordModuleBridge(
                 services.GetRequiredService<IModuleOptionsProvider>(),
-                services.GetRequiredService<IIntegrationTokenStore>(),
-                services.GetService<IConfigurationService>());
+                services.GetRequiredService<IIntegrationTokenStore>());
             return _fallbackBridge;
         }
     }

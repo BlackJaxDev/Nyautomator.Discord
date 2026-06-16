@@ -53,7 +53,15 @@
     "alert",
     "twitch-chat",
     "youtube-chat",
-    "discord-message",
+    {
+      "kind": "discord-message",
+      "nodeKind": "reaction",
+      "type": "Discord.Channel.SendMessage",
+      "name": "Send Discord Message",
+      "config": { "Message": "", "ChannelId": "" },
+      "messageParam": "Message",
+      "bindings": { "discordChannelId": "ChannelId" }
+    },
     "log"
   ]
 }
