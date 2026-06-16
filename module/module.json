@@ -31,6 +31,10 @@
         "renderer": "asset-frame",
         "statusSource": "/modules/discord/api/status",
         "assetPath": "dashboard/dashboard.html",
+        "metadata": {
+          "requiresAuth": true,
+          "authStatusFields": [ "connected" ]
+        },
         "order": 440
       }
     ],

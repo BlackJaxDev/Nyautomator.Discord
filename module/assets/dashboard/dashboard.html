@@ -38,6 +38,10 @@
       overflow: hidden;
     }
 
+    [hidden] {
+      display: none !important;
+    }
+
     button,
     input,
     select,
@@ -265,10 +269,19 @@
       white-space: nowrap;
     }
 
+    .message-workspace {
+      display: grid;
+      gap: 12px;
+    }
+
     .form-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
+    }
+
+    .form-grid.single {
+      grid-template-columns: 1fr;
     }
 
     .field {
@@ -408,14 +421,16 @@
       </div>
     </section>
 
-    <section class="message-panel" aria-label="Discord bot message">
+    <section id="message-panel" class="message-panel" aria-label="Discord bot message">
       <div class="message-head">
         <h4 class="panel-title">Bot Message</h4>
         <span id="bot-state" class="panel-subtitle">Checking bot token...</span>
       </div>
 
-      <div class="form-grid">
-        <label class="field" for="guild-select">
+      <div id="message-gate" class="notice warning" hidden></div>
+
+      <div id="guild-controls" class="form-grid">
+        <label id="server-field" class="field" for="guild-select">
           <span class="label">Server</span>
           <select id="guild-select" class="select" disabled>
             <option value="">Loading servers...</option>
@@ -423,7 +438,7 @@
           <span id="guild-note" class="field-note"></span>
         </label>
 
-        <label class="field" for="channel-select">
+        <label id="channel-field" class="field" for="channel-select">
           <span class="label">Channel</span>
           <select id="channel-select" class="select" disabled>
             <option value="">Select a server first</option>
@@ -432,10 +447,12 @@
         </label>
       </div>
 
-      <label class="field" for="message-content">
-        <span class="label">Message</span>
-        <textarea id="message-content" class="textarea" maxlength="2000" placeholder="Write a bot message..."></textarea>
-      </label>
+      <div id="composer-controls" class="message-workspace">
+        <label class="field" for="message-content">
+          <span class="label">Message</span>
+          <textarea id="message-content" class="textarea" maxlength="2000" placeholder="Write a bot message..."></textarea>
+        </label>
+      </div>
 
       <div class="message-actions">
         <button id="install-bot" type="button" class="btn warning" hidden>Install bot in server</button>
@@ -474,7 +491,13 @@
       refresh: document.getElementById('refresh'),
       connect: document.getElementById('connect'),
       disconnect: document.getElementById('disconnect'),
+      messagePanel: document.getElementById('message-panel'),
       botState: document.getElementById('bot-state'),
+      messageGate: document.getElementById('message-gate'),
+      guildControls: document.getElementById('guild-controls'),
+      serverField: document.getElementById('server-field'),
+      channelField: document.getElementById('channel-field'),
+      composerControls: document.getElementById('composer-controls'),
       guildSelect: document.getElementById('guild-select'),
       guildNote: document.getElementById('guild-note'),
       channelSelect: document.getElementById('channel-select'),
@@ -598,6 +621,14 @@
       return !!guild && guild.botInstallKnown !== false && guild.botInstalled !== true;
     }
 
+    function botInstalledGuilds() {
+      return state.guilds.filter(guild => guild?.botInstalled === true);
+    }
+
+    function selectedGuildHasBot() {
+      return selectedGuild()?.botInstalled === true;
+    }
+
     function selectedChannel() {
       return state.channels.find(channel => String(channel.id) === String(state.selectedChannelId)) || null;
     }
@@ -710,8 +741,6 @@
 
       const guild = selectedGuild();
       elements.guildNote.textContent = state.guildMessage || guildInstallMessage(guild);
-      elements.installBot.hidden = !guild || !!guild.botInstalled;
-
       renderControls();
       postHeight();
     }
@@ -760,20 +789,54 @@
       const hasBotToken = !!state.status?.botConfigured;
       const hasGuild = !!state.selectedGuildId;
       const guild = selectedGuild();
-      const knownNotInstalled = guildKnownNotInstalled(guild);
+      const botInAnyServer = botInstalledGuilds().length > 0;
+      const selectedBotReady = selectedGuildHasBot();
+      const showMessagePanel = !!state.status && connected;
+      const showGuildControls = showMessagePanel && hasBotToken && state.guilds.length > 0;
+      const showComposer = showGuildControls && selectedBotReady;
+      const showInstallBot = showGuildControls && configured && hasGuild && !selectedBotReady;
       const hasChannel = !!state.selectedChannelId;
       const message = elements.messageContent.value.trim();
+      let gateMessage = '';
+
+      elements.messagePanel.hidden = !showMessagePanel;
+      elements.guildControls.hidden = !showGuildControls;
+      elements.guildControls.classList.toggle('single', !showComposer);
+      elements.serverField.hidden = !showGuildControls;
+      elements.channelField.hidden = !showComposer;
+      elements.composerControls.hidden = !showComposer;
+      elements.refreshChannels.hidden = !showComposer;
+      elements.sendMessage.hidden = !showComposer;
+      elements.messageCounter.hidden = !showComposer;
+      elements.installBot.hidden = !showInstallBot;
+
+      if (showMessagePanel && !hasBotToken) {
+        gateMessage = 'Set a Discord bot token in Settings before using bot message tools.';
+      } else if (showMessagePanel && hasBotToken && state.guilds.length === 0) {
+        gateMessage = state.guildMessage || 'No Discord servers are available for this account or bot token.';
+      } else if (showMessagePanel && hasBotToken && !botInAnyServer) {
+        gateMessage = state.guildMessage || 'The configured Discord bot is not installed in any loaded server. Select a server and install the bot before using message tools.';
+      } else if (showMessagePanel && hasBotToken && guild && !selectedBotReady) {
+        gateMessage = guildKnownNotInstalled(guild)
+          ? 'The bot is not installed in the selected server. Select a bot-enabled server or install it here.'
+          : 'Bot install status for the selected server could not be verified. Install or refresh permissions before using message tools.';
+      } else if (showMessagePanel && hasBotToken && !guild) {
+        gateMessage = 'Select a Discord server with the bot installed.';
+      }
+
+      setNotice(elements.messageGate, gateMessage, 'warning');
 
       elements.refresh.disabled = state.busy;
       elements.connect.disabled = state.busy || !configured;
       elements.disconnect.disabled = state.busy || !connected;
-      elements.guildSelect.disabled = state.busy || state.guilds.length === 0;
-      elements.channelSelect.disabled = state.busy || state.channels.length === 0;
-      elements.installBot.disabled = state.busy || !configured || !hasGuild;
-      elements.refreshChannels.disabled = state.busy || !hasGuild || !hasBotToken || knownNotInstalled;
-      elements.sendMessage.disabled = state.busy || !hasBotToken || !hasChannel || !message;
+      elements.guildSelect.disabled = state.busy || !showGuildControls;
+      elements.channelSelect.disabled = state.busy || !showComposer || state.channels.length === 0;
+      elements.installBot.disabled = state.busy || !showInstallBot;
+      elements.refreshChannels.disabled = state.busy || !showComposer || !hasGuild;
+      elements.sendMessage.disabled = state.busy || !showComposer || !hasChannel || !message;
       elements.sendMessage.textContent = state.busy ? 'Working...' : 'Send as bot';
       elements.messageCounter.textContent = `${elements.messageContent.value.length} / 2000`;
+      postHeight();
     }
 
     async function loadStatus() {
@@ -782,6 +845,16 @@
     }
 
     async function loadGuilds(refresh = false) {
+      if (!state.status?.connected || !state.status?.botConfigured) {
+        state.guilds = [];
+        state.channels = [];
+        state.guildMessage = '';
+        state.channelMessage = '';
+        renderGuilds();
+        renderChannels();
+        return;
+      }
+
       const payload = await fetchJson(api(`guilds${refresh ? '?refresh=true' : ''}`));
       state.guilds = Array.isArray(payload.guilds) ? payload.guilds : [];
       state.guildMessage = payload.message || '';
@@ -806,8 +879,10 @@
       }
 
       const guild = selectedGuild();
-      if (guildKnownNotInstalled(guild)) {
-        state.channelMessage = 'Install the bot in this server to load channels.';
+      if (!guild || guild.botInstalled !== true) {
+        state.channelMessage = guild
+          ? 'Install the bot in this server to load channels.'
+          : 'Select a server with the bot installed to load channels.';
         renderChannels();
         return;
       }
