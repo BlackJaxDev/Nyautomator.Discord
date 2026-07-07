@@ -21,7 +21,7 @@ public sealed class DiscordModuleBridge(
     private const string TokenKey = "discord";
     private const string BotTokenKey = "discord:bot";
     private const string SystemBrowserSentinel = "__system__";
-    private const string DefaultBotInstallPermissions = "347200";
+    private const string DefaultBotInstallPermissions = "268782656";
     private const string ApiBase = "https://discord.com/api/v10";
     private static readonly Uri AuthorizeEndpoint = new("https://discord.com/oauth2/authorize");
     private static readonly Uri TokenEndpoint = new($"{ApiBase}/oauth2/token");
@@ -57,9 +57,12 @@ public sealed class DiscordModuleBridge(
                 "token" when IsDelete(request) => ClearToken(),
                 "guilds" when IsGet(request) => await GetGuildsAsync(request, cancellationToken).ConfigureAwait(false),
                 "channels" when IsGet(request) => await GetChannelsAsync(request, null, cancellationToken).ConfigureAwait(false),
+                "roles" when IsGet(request) => await GetRolesAsync(request, cancellationToken).ConfigureAwait(false),
                 "scopes/auto" when IsGet(request) => ModuleApiResponse.Json(GetAutoScopes()),
                 "messages" when IsPost(request) => await SendMessageAsync(await ReadBodyAsync<DiscordMessageRequest>(request.Body, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false),
                 "reactions" when IsPost(request) || IsPut(request) => await AddReactionAsync(await ReadBodyAsync<DiscordReactionRequest>(request.Body, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false),
+                "members/query" when IsPost(request) => await QueryMembersAsync(await ReadBodyAsync<DiscordMemberQueryRequest>(request.Body, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false),
+                "member-roles" when IsPost(request) || IsPut(request) => await ModifyMemberRolesAsync(await ReadBodyAsync<DiscordMemberRoleUpdateRequest>(request.Body, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false),
                 _ when TryMatchLegacyChannelMessage(path, out var channelId) && IsPost(request)
                     => await SendMessageAsync(WithChannelId(await ReadBodyAsync<DiscordMessageRequest>(request.Body, cancellationToken).ConfigureAwait(false), channelId), cancellationToken).ConfigureAwait(false),
                 _ when TryMatchLegacyGuildChannels(path, out var guildId) && IsGet(request)
@@ -94,9 +97,29 @@ public sealed class DiscordModuleBridge(
             return ToAuthResponse(response);
         }
 
+        if (path.Equals("members/query", StringComparison.OrdinalIgnoreCase) && IsPost(request.Method))
+        {
+            var payload = DeserializeBody<DiscordMemberQueryRequest>(request.Body);
+            var response = await QueryMembersAsync(payload, cancellationToken).ConfigureAwait(false);
+            return ToAuthResponse(response);
+        }
+
+        if (path.Equals("member-roles", StringComparison.OrdinalIgnoreCase) && (IsPost(request.Method) || IsPut(request.Method)))
+        {
+            var payload = DeserializeBody<DiscordMemberRoleUpdateRequest>(request.Body);
+            var response = await ModifyMemberRolesAsync(payload, cancellationToken).ConfigureAwait(false);
+            return ToAuthResponse(response);
+        }
+
         if (path.Equals("channels", StringComparison.OrdinalIgnoreCase) && IsMethod(request.Method, "GET"))
         {
             var response = await GetChannelsAsync(BuildAdapterRequest(request, path), null, cancellationToken).ConfigureAwait(false);
+            return ToAuthResponse(response);
+        }
+
+        if (path.Equals("roles", StringComparison.OrdinalIgnoreCase) && IsMethod(request.Method, "GET"))
+        {
+            var response = await GetRolesAsync(BuildAdapterRequest(request, path), cancellationToken).ConfigureAwait(false);
             return ToAuthResponse(response);
         }
 
@@ -552,6 +575,176 @@ public sealed class DiscordModuleBridge(
             : MessageSendResult.Fail("Discord did not accept the reaction request.", 502);
     }
 
+    private async Task<ModuleApiResponse> GetRolesAsync(ModuleApiRequest request, CancellationToken cancellationToken)
+    {
+        var moduleOptions = GetOptions();
+        var effectiveGuildId = NormalizeSnowflake(QueryValue(request, "guildId")) ?? NormalizeSnowflake(moduleOptions.GuildId);
+        if (string.IsNullOrWhiteSpace(effectiveGuildId))
+            return Error("guildId is required or configure a Discord server.", 400);
+
+        var botToken = GetBotToken(moduleOptions);
+        if (string.IsNullOrWhiteSpace(botToken))
+            return Error("Discord bot token is not configured.", 409);
+
+        var client = new DiscordRestClient(botToken);
+        var roles = await client.GetGuildRolesAsync(effectiveGuildId, cancellationToken).ConfigureAwait(false);
+        if (roles is null)
+            return Error("Unable to load Discord roles for the selected server.", 502);
+
+        var payload = roles
+            .Where(static role => !string.IsNullOrWhiteSpace(role.Id))
+            .OrderByDescending(static role => role.Position ?? int.MinValue)
+            .ThenBy(static role => role.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(static role => new
+            {
+                id = role.Id,
+                name = role.Name,
+                color = role.Color,
+                hoist = role.Hoist,
+                position = role.Position,
+                managed = role.Managed,
+                mentionable = role.Mentionable,
+                optionValue = string.IsNullOrWhiteSpace(role.Name) ? role.Id : $"{role.Id}|@{role.Name}"
+            })
+            .ToArray();
+
+        return ModuleApiResponse.Json(new
+        {
+            success = true,
+            guildId = effectiveGuildId,
+            roles = payload,
+            count = payload.Length
+        });
+    }
+
+    private async Task<ModuleApiResponse> QueryMembersAsync(DiscordMemberQueryRequest? request, CancellationToken cancellationToken)
+    {
+        var moduleOptions = GetOptions();
+        var guildId = NormalizeSnowflake(request?.GuildId) ?? NormalizeSnowflake(moduleOptions.GuildId);
+        if (string.IsNullOrWhiteSpace(guildId))
+            return Error("guildId is required or configure a Discord server.", 400);
+
+        var botToken = GetBotToken(moduleOptions);
+        if (string.IsNullOrWhiteSpace(botToken))
+            return Error("Discord bot token is not configured.", 409);
+
+        var maxResults = Math.Clamp(request?.MaxResults ?? 1000, 1, 10000);
+        var filter = ParseMemberFilter(request?.Filter);
+        var fields = ParseMemberFields(request?.Fields);
+        var client = new DiscordRestClient(botToken);
+
+        var needsRoles = filter.HasRoleCriteria || fields.RequiresRoleNames;
+        var roleLookup = needsRoles
+            ? await LoadRoleLookupAsync(client, guildId, cancellationToken).ConfigureAwait(false)
+            : RoleLookup.Empty;
+
+        if (needsRoles && roleLookup is null)
+            return Error("Unable to load Discord roles for the selected server.", 502);
+
+        var roleFilter = ResolveRoleFilter(filter, roleLookup ?? RoleLookup.Empty, out var missingRoles);
+        if (missingRoles.Count > 0)
+            return Error($"Discord role filter could not be resolved: {string.Join(", ", missingRoles)}.", 400);
+
+        var members = await FetchMemberCandidatesAsync(client, guildId, filter, maxResults, cancellationToken).ConfigureAwait(false);
+        if (members is null)
+            return Error("Unable to load Discord members. The bot may need the Server Members intent or access to the selected server.", 502);
+
+        var projected = members
+            .Where(member => MemberMatches(member, filter, roleFilter))
+            .Take(maxResults)
+            .Select(member => ProjectMember(member, guildId, fields, roleLookup ?? RoleLookup.Empty))
+            .ToArray();
+
+        var response = new
+        {
+            success = true,
+            guildId,
+            filter = filter.ToResponse(),
+            requestedFields = fields.ResponseFields,
+            members = projected,
+            count = projected.Length,
+            maxResults
+        };
+
+        return ModuleApiResponse.Json(response);
+    }
+
+    private async Task<ModuleApiResponse> ModifyMemberRolesAsync(DiscordMemberRoleUpdateRequest? request, CancellationToken cancellationToken)
+    {
+        var moduleOptions = GetOptions();
+        var guildId = NormalizeSnowflake(request?.GuildId) ?? NormalizeSnowflake(moduleOptions.GuildId);
+        if (string.IsNullOrWhiteSpace(guildId))
+            return Error("guildId is required or configure a Discord server.", 400);
+
+        var botToken = GetBotToken(moduleOptions);
+        if (string.IsNullOrWhiteSpace(botToken))
+            return Error("Discord bot token is not configured.", 409);
+
+        var action = NormalizeRoleAction(request?.Action);
+        if (action is null)
+            return Error("Action must be add or remove.", 400);
+
+        var roleSelectors = ReadStringList(request?.Roles);
+        if (roleSelectors.Count == 0)
+            return Error("At least one role ID or role name is required.", 400);
+
+        var client = new DiscordRestClient(botToken);
+        var memberResult = await ResolveMemberAsync(client, guildId, request, cancellationToken).ConfigureAwait(false);
+        if (memberResult.Member is null)
+            return Error(memberResult.Error ?? "Unable to resolve Discord member.", memberResult.StatusCode);
+
+        var roleLookup = await LoadRoleLookupAsync(client, guildId, cancellationToken).ConfigureAwait(false);
+        if (roleLookup is null)
+            return Error("Unable to load Discord roles for the selected server.", 502);
+
+        var resolvedRoles = ResolveRoleSelectors(roleSelectors, roleLookup, out var roleErrors);
+        if (roleErrors.Count > 0)
+            return Error($"Discord roles could not be resolved: {string.Join(", ", roleErrors)}.", 400);
+
+        var userId = memberResult.Member.User?.Id;
+        if (string.IsNullOrWhiteSpace(userId))
+            return Error("Resolved Discord member has no user ID.", 502);
+
+        var results = new List<object>();
+        var changed = 0;
+        foreach (var role in resolvedRoles)
+        {
+            var operation = string.Equals(action, "add", StringComparison.OrdinalIgnoreCase)
+                ? await client.AddGuildMemberRoleAsync(guildId, userId, role.Id, request?.AuditLogReason, cancellationToken).ConfigureAwait(false)
+                : await client.RemoveGuildMemberRoleAsync(guildId, userId, role.Id, request?.AuditLogReason, cancellationToken).ConfigureAwait(false);
+
+            if (operation.Success)
+                changed++;
+
+            results.Add(new
+            {
+                roleId = role.Id,
+                roleName = role.Name,
+                success = operation.Success,
+                statusCode = operation.StatusCode,
+                body = operation.Body ?? string.Empty
+            });
+        }
+
+        var success = changed == resolvedRoles.Count;
+        var failed = resolvedRoles.Count - changed;
+        var statusCode = success ? 200 : changed > 0 ? 207 : 502;
+        return ModuleApiResponse.Json(new
+        {
+            success,
+            guildId,
+            action,
+            userId,
+            username = memberResult.Member.User?.Username,
+            displayName = GetMemberDisplayName(memberResult.Member),
+            roles = resolvedRoles.Select(static role => new { roleId = role.Id, roleName = role.Name }).ToArray(),
+            changedCount = changed,
+            failedCount = failed,
+            results,
+            error = success ? null : "One or more Discord role updates failed."
+        }, statusCode);
+    }
+
     private async Task<ModuleAuthResponse> SendRawDiscordApiAsync(ModuleAuthRequest request, CancellationToken cancellationToken)
     {
         var botToken = GetBotToken(GetOptions());
@@ -902,6 +1095,693 @@ public sealed class DiscordModuleBridge(
                && !string.IsNullOrWhiteSpace(category)
             ? $"{category} / {label}"
             : label;
+    }
+
+    private static async Task<RoleLookup?> LoadRoleLookupAsync(DiscordRestClient client, string guildId, CancellationToken cancellationToken)
+    {
+        var roles = await client.GetGuildRolesAsync(guildId, cancellationToken).ConfigureAwait(false);
+        return roles is null ? null : new RoleLookup(roles);
+    }
+
+    private static async Task<IReadOnlyList<DiscordRestClient.DiscordGuildMemberResponse>?> FetchMemberCandidatesAsync(
+        DiscordRestClient client,
+        string guildId,
+        MemberFilter filter,
+        int maxResults,
+        CancellationToken cancellationToken)
+    {
+        var userId = NormalizeDiscordUserId(filter.UserId);
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            var member = await client.GetGuildMemberAsync(guildId, userId, cancellationToken).ConfigureAwait(false);
+            return member is null
+                ? Array.Empty<DiscordRestClient.DiscordGuildMemberResponse>()
+                : new[] { member };
+        }
+
+        var searchQuery = BuildMemberSearchQuery(filter);
+        if (RequiresFullMemberScan(filter) || string.IsNullOrWhiteSpace(searchQuery))
+            return await ListGuildMembersPagedAsync(client, guildId, maxResults, cancellationToken).ConfigureAwait(false);
+
+        return await client.SearchGuildMembersAsync(guildId, searchQuery, Math.Min(maxResults, 1000), cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<IReadOnlyList<DiscordRestClient.DiscordGuildMemberResponse>?> ListGuildMembersPagedAsync(
+        DiscordRestClient client,
+        string guildId,
+        int maxResults,
+        CancellationToken cancellationToken)
+    {
+        var members = new List<DiscordRestClient.DiscordGuildMemberResponse>();
+        string? after = null;
+
+        while (members.Count < maxResults)
+        {
+            var take = Math.Min(1000, maxResults - members.Count);
+            var page = await client.ListGuildMembersAsync(guildId, take, after, cancellationToken).ConfigureAwait(false);
+            if (page is null)
+                return null;
+
+            if (page.Count == 0)
+                break;
+
+            members.AddRange(page);
+            after = page.LastOrDefault()?.User?.Id;
+            if (page.Count < take || string.IsNullOrWhiteSpace(after))
+                break;
+        }
+
+        return members;
+    }
+
+    private static bool RequiresFullMemberScan(MemberFilter filter)
+        => filter.HasRoleCriteria
+           || !string.IsNullOrWhiteSpace(filter.UsernameContains)
+           || !string.IsNullOrWhiteSpace(filter.DisplayNameContains)
+           || !string.IsNullOrWhiteSpace(filter.NameContains);
+
+    private static string? BuildMemberSearchQuery(MemberFilter filter)
+        => FirstNonEmpty(filter.Query, filter.UsernameEquals, filter.DisplayNameEquals);
+
+    private static RoleFilter ResolveRoleFilter(MemberFilter filter, RoleLookup roleLookup, out List<string> errors)
+    {
+        errors = new List<string>();
+        var all = ResolveRoleIds(filter.RolesAll, roleLookup, errors);
+        var any = ResolveRoleIds(filter.RolesAny, roleLookup, errors);
+        return new RoleFilter(all, any);
+    }
+
+    private static HashSet<string> ResolveRoleIds(IEnumerable<string> selectors, RoleLookup roleLookup, List<string> errors)
+    {
+        var resolved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var selector in selectors)
+        {
+            var role = ResolveRoleSelector(selector, roleLookup, out var error);
+            if (role is null)
+            {
+                if (!string.IsNullOrWhiteSpace(error))
+                    errors.Add(error);
+                continue;
+            }
+
+            resolved.Add(role.Id);
+        }
+
+        return resolved;
+    }
+
+    private static List<ResolvedRole> ResolveRoleSelectors(IReadOnlyList<string> selectors, RoleLookup roleLookup, out List<string> errors)
+    {
+        errors = new List<string>();
+        var resolved = new List<ResolvedRole>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var selector in selectors)
+        {
+            var role = ResolveRoleSelector(selector, roleLookup, out var error);
+            if (role is null)
+            {
+                if (!string.IsNullOrWhiteSpace(error))
+                    errors.Add(error);
+                continue;
+            }
+
+            if (seen.Add(role.Id))
+                resolved.Add(role);
+        }
+
+        return resolved;
+    }
+
+    private static ResolvedRole? ResolveRoleSelector(string? selector, RoleLookup roleLookup, out string? error)
+    {
+        error = null;
+        var clean = CleanRoleSelector(selector);
+        if (string.IsNullOrWhiteSpace(clean))
+            return null;
+
+        var id = ExtractSnowflake(clean);
+        if (!string.IsNullOrWhiteSpace(id))
+            return new ResolvedRole(id, roleLookup.NameFor(id));
+
+        var matches = roleLookup.Roles
+            .Where(role => string.Equals(role.Name?.Trim(), clean, StringComparison.OrdinalIgnoreCase))
+            .Where(static role => !string.IsNullOrWhiteSpace(role.Id))
+            .ToArray();
+
+        if (matches.Length == 1)
+            return new ResolvedRole(matches[0].Id!, matches[0].Name);
+
+        error = matches.Length > 1
+            ? $"{clean} (multiple roles share that name; use a role ID)"
+            : $"{clean} (not found)";
+        return null;
+    }
+
+    private static bool MemberMatches(
+        DiscordRestClient.DiscordGuildMemberResponse member,
+        MemberFilter filter,
+        RoleFilter roleFilter)
+    {
+        var user = member.User;
+        if (!string.IsNullOrWhiteSpace(filter.UserId)
+            && !string.Equals(NormalizeDiscordUserId(filter.UserId), user?.Id, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(filter.UsernameEquals)
+            && !string.Equals(user?.Username, filter.UsernameEquals.Trim(), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(filter.UsernameContains)
+            && !ContainsIgnoreCase(user?.Username, filter.UsernameContains))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(filter.DisplayNameEquals)
+            && !string.Equals(GetMemberDisplayName(member), filter.DisplayNameEquals.Trim(), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(filter.DisplayNameContains)
+            && !ContainsIgnoreCase(GetMemberDisplayName(member), filter.DisplayNameContains))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(filter.NameContains)
+            && !AnyMemberNameContains(member, filter.NameContains))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(filter.Query)
+            && !AnyMemberNameContains(member, filter.Query))
+            return false;
+
+        if (filter.Bot.HasValue && user?.Bot != filter.Bot.Value)
+            return false;
+
+        if (roleFilter.HasCriteria)
+        {
+            var memberRoles = new HashSet<string>(member.Roles ?? [], StringComparer.OrdinalIgnoreCase);
+            if (roleFilter.RequiredAll.Count > 0 && !roleFilter.RequiredAll.All(memberRoles.Contains))
+                return false;
+
+            if (roleFilter.RequiredAny.Count > 0 && !roleFilter.RequiredAny.Any(memberRoles.Contains))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static Dictionary<string, object?> ProjectMember(
+        DiscordRestClient.DiscordGuildMemberResponse member,
+        string guildId,
+        MemberFieldSelection fields,
+        RoleLookup roleLookup)
+    {
+        var user = member.User;
+        var userId = user?.Id;
+        var roleIds = (member.Roles ?? []).ToArray();
+        var output = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+        void Put(string field, object? value)
+        {
+            if (fields.Has(field))
+                output[field] = value;
+        }
+
+        Put("id", userId);
+        Put("user", user);
+        Put("username", user?.Username);
+        Put("discriminator", user?.Discriminator);
+        Put("globalName", user?.GlobalName);
+        Put("displayName", GetMemberDisplayName(member));
+        Put("nick", member.Nick);
+        Put("bot", user?.Bot);
+        Put("system", user?.System);
+        Put("avatar", member.Avatar ?? user?.Avatar);
+        Put("avatarUrl", BuildMemberAvatarUrl(guildId, userId, member));
+        Put("banner", member.Banner ?? user?.Banner);
+        Put("accentColor", user?.AccentColor);
+        Put("joinedAt", member.JoinedAt);
+        Put("premiumSince", member.PremiumSince);
+        Put("deaf", member.Deaf);
+        Put("mute", member.Mute);
+        Put("pending", member.Pending);
+        Put("flags", member.Flags);
+        Put("userFlags", user?.Flags);
+        Put("publicFlags", user?.PublicFlags);
+        Put("permissions", member.Permissions);
+        Put("communicationDisabledUntil", member.CommunicationDisabledUntil);
+        Put("mfaEnabled", user?.MfaEnabled);
+        Put("locale", user?.Locale);
+        Put("verified", user?.Verified);
+        Put("email", user?.Email);
+        Put("premiumType", user?.PremiumType);
+        Put("avatarDecorationData", JsonValueOrNull(member.AvatarDecorationData) ?? JsonValueOrNull(user?.AvatarDecorationData));
+        Put("memberAvatarDecorationData", JsonValueOrNull(member.AvatarDecorationData));
+        Put("userAvatarDecorationData", JsonValueOrNull(user?.AvatarDecorationData));
+        Put("collectibles", JsonValueOrNull(member.Collectibles) ?? JsonValueOrNull(user?.Collectibles));
+        Put("memberCollectibles", JsonValueOrNull(member.Collectibles));
+        Put("userCollectibles", JsonValueOrNull(user?.Collectibles));
+        Put("primaryGuild", JsonValueOrNull(user?.PrimaryGuild));
+        Put("roleIds", roleIds);
+        Put("roleNames", roleIds.Select(roleId => roleLookup.NameFor(roleId) ?? roleId).ToArray());
+        Put("roles", BuildMemberRolePayload(member, roleLookup));
+        Put("raw", member);
+
+        return output;
+    }
+
+    private static object[] BuildMemberRolePayload(DiscordRestClient.DiscordGuildMemberResponse member, RoleLookup roleLookup)
+        => (member.Roles ?? [])
+            .Select(roleId => new
+            {
+                id = roleId,
+                name = roleLookup.NameFor(roleId)
+            })
+            .ToArray<object>();
+
+    private static JsonElement? JsonValueOrNull(JsonElement? value)
+        => value.HasValue && value.Value.ValueKind is not JsonValueKind.Undefined and not JsonValueKind.Null
+            ? value.Value.Clone()
+            : null;
+
+    private static async Task<MemberResolveResult> ResolveMemberAsync(
+        DiscordRestClient client,
+        string guildId,
+        DiscordMemberRoleUpdateRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var userReference = FirstNonEmpty(request?.UserId, request?.User, request?.Username);
+        if (string.IsNullOrWhiteSpace(userReference))
+            return new MemberResolveResult(null, "User, UserId, or Username is required.", 400);
+
+        var userId = NormalizeDiscordUserId(userReference);
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            var directMember = await client.GetGuildMemberAsync(guildId, userId, cancellationToken).ConfigureAwait(false);
+            return directMember is null
+                ? new MemberResolveResult(null, $"Discord member {userId} was not found or could not be loaded.", 404)
+                : new MemberResolveResult(directMember, null, 200);
+        }
+
+        var query = userReference.Trim().TrimStart('@');
+        var members = await client.SearchGuildMembersAsync(guildId, query, 100, cancellationToken).ConfigureAwait(false);
+        if (members is null)
+            return new MemberResolveResult(null, "Unable to search Discord members.", 502);
+
+        var exactMatches = members.Where(member => MemberReferenceMatches(member, query, requireExact: true)).ToArray();
+        if (exactMatches.Length == 1)
+            return new MemberResolveResult(exactMatches[0], null, 200);
+
+        if (exactMatches.Length > 1)
+            return new MemberResolveResult(null, $"Multiple Discord members matched '{query}'. Use a user ID.", 400);
+
+        if (members.Count == 1)
+            return new MemberResolveResult(members[0], null, 200);
+
+        return new MemberResolveResult(null, $"No Discord member matched '{query}'. Use a user ID for exact targeting.", 404);
+    }
+
+    private static bool MemberReferenceMatches(DiscordRestClient.DiscordGuildMemberResponse member, string query, bool requireExact)
+    {
+        var user = member.User;
+        var discriminatorName = !string.IsNullOrWhiteSpace(user?.Username) && !string.IsNullOrWhiteSpace(user?.Discriminator)
+            ? $"{user.Username}#{user.Discriminator}"
+            : null;
+        var names = new[]
+        {
+            user?.Username,
+            user?.GlobalName,
+            member.Nick,
+            GetMemberDisplayName(member),
+            discriminatorName
+        };
+
+        return requireExact
+            ? names.Any(name => string.Equals(name?.Trim(), query.Trim(), StringComparison.OrdinalIgnoreCase))
+            : names.Any(name => ContainsIgnoreCase(name, query));
+    }
+
+    private static MemberFilter ParseMemberFilter(object? raw)
+    {
+        var filter = new MemberFilter();
+        if (raw is null)
+            return filter;
+
+        if (raw is JsonElement element)
+        {
+            ApplyMemberFilterElement(filter, element);
+            return filter;
+        }
+
+        var text = raw.ToString()?.Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            return filter;
+
+        if (text.StartsWith('{'))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(text);
+                ApplyMemberFilterElement(filter, document.RootElement);
+                return filter;
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        if (text.Contains('='))
+        {
+            foreach (var part in text.Split(['\r', '\n', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var split = part.Split('=', 2);
+                if (split.Length == 2)
+                    ApplyMemberFilterProperty(filter, split[0], ParseStringList(split[1]));
+            }
+
+            return filter;
+        }
+
+        filter.Query = text;
+        return filter;
+    }
+
+    private static void ApplyMemberFilterElement(MemberFilter filter, JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            var nested = ParseMemberFilter(element.GetString());
+            filter.CopyFrom(nested);
+            return;
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+            return;
+
+        foreach (var property in element.EnumerateObject())
+            ApplyMemberFilterProperty(filter, property.Name, ReadJsonStringList(property.Value), ReadJsonBoolean(property.Value));
+    }
+
+    private static void ApplyMemberFilterProperty(MemberFilter filter, string key, IReadOnlyList<string> values, bool? boolValue = null)
+    {
+        var normalized = NormalizeLooseKey(key);
+        var first = values.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+        switch (normalized)
+        {
+            case "id":
+            case "userid":
+            case "user":
+                filter.UserId = first;
+                break;
+            case "query":
+            case "search":
+                filter.Query = first;
+                break;
+            case "username":
+            case "usernamecontains":
+                filter.UsernameContains = first;
+                break;
+            case "usernameequals":
+            case "exactusername":
+                filter.UsernameEquals = first;
+                break;
+            case "displayname":
+            case "displaynamecontains":
+            case "nickname":
+            case "nicknamecontains":
+            case "nick":
+            case "nickcontains":
+                filter.DisplayNameContains = first;
+                break;
+            case "displaynameequals":
+            case "nicknameequals":
+            case "nickequals":
+                filter.DisplayNameEquals = first;
+                break;
+            case "name":
+            case "namecontains":
+                filter.NameContains = first;
+                break;
+            case "role":
+            case "roles":
+            case "roleid":
+            case "roleids":
+            case "rolename":
+            case "rolenames":
+            case "rolesall":
+            case "hasroles":
+                filter.RolesAll.AddRange(ExpandStringList(values));
+                break;
+            case "rolesany":
+            case "anyrole":
+            case "anyroles":
+                filter.RolesAny.AddRange(ExpandStringList(values));
+                break;
+            case "bot":
+            case "isbot":
+                filter.Bot = boolValue ?? ParseNullableBoolean(first);
+                break;
+            case "includebots":
+                var includeBots = boolValue ?? ParseNullableBoolean(first);
+                if (includeBots == false)
+                    filter.Bot = false;
+                break;
+        }
+    }
+
+    private static MemberFieldSelection ParseMemberFields(object? raw)
+    {
+        var values = ReadStringList(raw)
+            .Select(NormalizeMemberField)
+            .Where(static field => !string.IsNullOrWhiteSpace(field))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (values.Any(static field => string.Equals(field, "all", StringComparison.OrdinalIgnoreCase)))
+            return MemberFieldSelection.ForAll();
+
+        return values.Length == 0
+            ? MemberFieldSelection.Default()
+            : new MemberFieldSelection(false, values);
+    }
+
+    private static string? NormalizeMemberField(string? field)
+    {
+        var normalized = NormalizeLooseKey(field);
+        return normalized switch
+        {
+            "" => null,
+            "all" => "all",
+            "id" or "userid" => "id",
+            "user" => "user",
+            "username" => "username",
+            "discriminator" => "discriminator",
+            "globalname" => "globalName",
+            "displayname" or "name" => "displayName",
+            "nick" or "nickname" => "nick",
+            "role" or "roles" => "roles",
+            "roleid" or "roleids" => "roleIds",
+            "rolename" or "rolenames" => "roleNames",
+            "joined" or "joinedat" or "joinedatutc" => "joinedAt",
+            "premiumsince" or "boostingsince" => "premiumSince",
+            "avatar" => "avatar",
+            "avatarurl" => "avatarUrl",
+            "banner" => "banner",
+            "bot" or "isbot" => "bot",
+            "system" => "system",
+            "mfaenabled" => "mfaEnabled",
+            "accentcolor" => "accentColor",
+            "locale" => "locale",
+            "verified" => "verified",
+            "email" => "email",
+            "premiumtype" => "premiumType",
+            "avatardecorationdata" => "avatarDecorationData",
+            "memberavatardecorationdata" => "memberAvatarDecorationData",
+            "useravatardecorationdata" => "userAvatarDecorationData",
+            "collectibles" => "collectibles",
+            "membercollectibles" => "memberCollectibles",
+            "usercollectibles" => "userCollectibles",
+            "primaryguild" => "primaryGuild",
+            "flags" => "flags",
+            "userflags" => "userFlags",
+            "publicflags" => "publicFlags",
+            "pending" => "pending",
+            "deaf" => "deaf",
+            "mute" => "mute",
+            "permissions" => "permissions",
+            "communicationdisableduntil" or "timeoutuntil" or "timedoutuntil" => "communicationDisabledUntil",
+            "raw" or "rawjson" => "raw",
+            _ => null
+        };
+    }
+
+    private static List<string> ReadStringList(object? raw)
+    {
+        if (raw is null)
+            return [];
+
+        if (raw is JsonElement element)
+            return ReadJsonStringList(element);
+
+        if (raw is IEnumerable<string> strings)
+            return strings.SelectMany(ParseStringList).ToList();
+
+        if (raw is IEnumerable<object> objects)
+            return objects.Select(static value => value?.ToString()).SelectMany(ParseStringList).ToList();
+
+        return ParseStringList(raw.ToString());
+    }
+
+    private static List<string> ReadJsonStringList(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Array => element.EnumerateArray()
+                .Select(ReadJsonScalarString)
+                .Where(static value => !string.IsNullOrWhiteSpace(value))
+                .SelectMany(ParseStringList)
+                .ToList(),
+            JsonValueKind.String => ParseStringList(element.GetString()),
+            JsonValueKind.Null or JsonValueKind.Undefined => [],
+            _ => ParseStringList(ReadJsonScalarString(element))
+        };
+    }
+
+    private static List<string> ParseStringList(string? text)
+    {
+        text = text?.Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            return [];
+
+        if (text.StartsWith('['))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(text);
+                return ReadJsonStringList(document.RootElement);
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return text
+            .Split([',', '\r', '\n', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(static value => value.Trim().Trim('"', '\''))
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .ToList();
+    }
+
+    private static IEnumerable<string> ExpandStringList(IEnumerable<string> values)
+        => values.SelectMany(ParseStringList).Where(static value => !string.IsNullOrWhiteSpace(value));
+
+    private static string? ReadJsonScalarString(JsonElement element)
+        => element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => element.ToString(),
+            JsonValueKind.Null or JsonValueKind.Undefined => null,
+            _ => element.GetRawText()
+        };
+
+    private static bool? ReadJsonBoolean(JsonElement element)
+        => element.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String => ParseNullableBoolean(element.GetString()),
+            _ => null
+        };
+
+    private static bool? ParseNullableBoolean(string? value)
+        => bool.TryParse(value?.Trim(), out var parsed) ? parsed : null;
+
+    private static string? NormalizeRoleAction(string? action)
+    {
+        var normalized = NormalizeLooseKey(action);
+        return normalized switch
+        {
+            "" or "add" or "grant" or "assign" => "add",
+            "remove" or "revoke" or "delete" or "unassign" => "remove",
+            _ => null
+        };
+    }
+
+    private static string? CleanRoleSelector(string? selector)
+    {
+        var clean = selector?.Trim();
+        if (string.IsNullOrWhiteSpace(clean))
+            return null;
+
+        var pipeIndex = clean.IndexOf('|');
+        if (pipeIndex > 0)
+            clean = clean[..pipeIndex].Trim();
+
+        if (clean.StartsWith('@') && !clean.StartsWith("@&", StringComparison.Ordinal))
+            clean = clean[1..].Trim();
+
+        return clean;
+    }
+
+    private static string? NormalizeDiscordUserId(string? value)
+        => ExtractSnowflake(value);
+
+    private static string? ExtractSnowflake(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return null;
+
+        var pipeIndex = trimmed.IndexOf('|');
+        if (pipeIndex > 0)
+            trimmed = trimmed[..pipeIndex].Trim();
+
+        if (trimmed.StartsWith("<@", StringComparison.Ordinal) && trimmed.EndsWith('>'))
+        {
+            var digits = new string(trimmed.Where(char.IsDigit).ToArray());
+            return string.IsNullOrWhiteSpace(digits) ? null : digits;
+        }
+
+        return trimmed.All(char.IsDigit) ? trimmed : null;
+    }
+
+    private static string NormalizeLooseKey(string? value)
+        => string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : new string(value.Trim().Where(static ch => ch != '_' && ch != '-' && !char.IsWhiteSpace(ch)).ToArray()).ToLowerInvariant();
+
+    private static bool ContainsIgnoreCase(string? value, string? expected)
+        => !string.IsNullOrWhiteSpace(value)
+           && !string.IsNullOrWhiteSpace(expected)
+           && value.Contains(expected.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private static bool AnyMemberNameContains(DiscordRestClient.DiscordGuildMemberResponse member, string? expected)
+        => ContainsIgnoreCase(member.User?.Username, expected)
+           || ContainsIgnoreCase(member.User?.GlobalName, expected)
+           || ContainsIgnoreCase(member.Nick, expected)
+           || ContainsIgnoreCase(GetMemberDisplayName(member), expected)
+           || ContainsIgnoreCase(member.User?.Id, expected);
+
+    private static string GetMemberDisplayName(DiscordRestClient.DiscordGuildMemberResponse member)
+        => FirstNonEmpty(member.Nick, member.User?.GlobalName, member.User?.Username, member.User?.Id) ?? "Unknown";
+
+    private static string? BuildMemberAvatarUrl(
+        string guildId,
+        string? userId,
+        DiscordRestClient.DiscordGuildMemberResponse member)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return null;
+
+        if (!string.IsNullOrWhiteSpace(member.Avatar))
+        {
+            var extension = member.Avatar.StartsWith("a_", StringComparison.OrdinalIgnoreCase) ? "gif" : "png";
+            return $"https://cdn.discordapp.com/guilds/{Uri.EscapeDataString(guildId)}/users/{Uri.EscapeDataString(userId)}/avatars/{Uri.EscapeDataString(member.Avatar)}.{extension}?size=128";
+        }
+
+        return string.IsNullOrWhiteSpace(member.User?.Avatar)
+            ? null
+            : BuildAvatarUrl(userId, member.User.Avatar);
     }
 
     private static ModuleApiResponse ToModuleResponse(MessageSendResult result)
@@ -1334,4 +2214,119 @@ public sealed class DiscordModuleBridge(
         string? ChannelId,
         string? MessageId,
         string? Emoji);
+
+    private sealed record DiscordMemberQueryRequest(
+        string? GuildId,
+        object? Filter,
+        object? Fields,
+        int? MaxResults);
+
+    private sealed record DiscordMemberRoleUpdateRequest(
+        string? GuildId,
+        string? User,
+        string? UserId,
+        string? Username,
+        object? Roles,
+        string? Action,
+        string? AuditLogReason);
+
+    private sealed class MemberFilter
+    {
+        public string? UserId { get; set; }
+        public string? Query { get; set; }
+        public string? UsernameContains { get; set; }
+        public string? UsernameEquals { get; set; }
+        public string? DisplayNameContains { get; set; }
+        public string? DisplayNameEquals { get; set; }
+        public string? NameContains { get; set; }
+        public bool? Bot { get; set; }
+        public List<string> RolesAll { get; } = [];
+        public List<string> RolesAny { get; } = [];
+        public bool HasRoleCriteria => RolesAll.Count > 0 || RolesAny.Count > 0;
+
+        public void CopyFrom(MemberFilter other)
+        {
+            UserId = other.UserId;
+            Query = other.Query;
+            UsernameContains = other.UsernameContains;
+            UsernameEquals = other.UsernameEquals;
+            DisplayNameContains = other.DisplayNameContains;
+            DisplayNameEquals = other.DisplayNameEquals;
+            NameContains = other.NameContains;
+            Bot = other.Bot;
+            RolesAll.Clear();
+            RolesAll.AddRange(other.RolesAll);
+            RolesAny.Clear();
+            RolesAny.AddRange(other.RolesAny);
+        }
+
+        public object ToResponse()
+            => new
+            {
+                userId = UserId,
+                query = Query,
+                usernameContains = UsernameContains,
+                usernameEquals = UsernameEquals,
+                displayNameContains = DisplayNameContains,
+                displayNameEquals = DisplayNameEquals,
+                nameContains = NameContains,
+                bot = Bot,
+                rolesAll = RolesAll,
+                rolesAny = RolesAny
+            };
+    }
+
+    private sealed class MemberFieldSelection(bool all, IEnumerable<string> fields)
+    {
+        private static readonly string[] DefaultFields = ["id", "username", "displayName", "roles"];
+        private readonly HashSet<string> _fields = new(fields, StringComparer.OrdinalIgnoreCase);
+
+        public bool All { get; } = all;
+        public bool RequiresRoleNames => All || Has("roles") || Has("roleNames");
+        public string[] ResponseFields => All ? ["all"] : _fields.OrderBy(static name => name, StringComparer.OrdinalIgnoreCase).ToArray();
+
+        public bool Has(string field)
+            => All || _fields.Contains(field);
+
+        public static MemberFieldSelection Default()
+            => new(false, DefaultFields);
+
+        public static MemberFieldSelection ForAll()
+            => new(true, Array.Empty<string>());
+    }
+
+    private sealed record RoleFilter(HashSet<string> RequiredAll, HashSet<string> RequiredAny)
+    {
+        public bool HasCriteria => RequiredAll.Count > 0 || RequiredAny.Count > 0;
+    }
+
+    private sealed class RoleLookup
+    {
+        public static RoleLookup Empty { get; } = new([]);
+
+        private readonly Dictionary<string, DiscordRestClient.DiscordRoleResponse> _rolesById;
+
+        public RoleLookup(IReadOnlyList<DiscordRestClient.DiscordRoleResponse> roles)
+        {
+            Roles = roles;
+            _rolesById = roles
+                .Where(static role => !string.IsNullOrWhiteSpace(role.Id))
+                .GroupBy(static role => role.Id!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
+        }
+
+        public IReadOnlyList<DiscordRestClient.DiscordRoleResponse> Roles { get; }
+
+        public string? NameFor(string? roleId)
+            => !string.IsNullOrWhiteSpace(roleId) && _rolesById.TryGetValue(roleId, out var role)
+                ? role.Name
+                : null;
+    }
+
+    private sealed record ResolvedRole(string Id, string? Name);
+
+    private sealed record MemberResolveResult(
+        DiscordRestClient.DiscordGuildMemberResponse? Member,
+        string? Error,
+        int StatusCode);
 }
