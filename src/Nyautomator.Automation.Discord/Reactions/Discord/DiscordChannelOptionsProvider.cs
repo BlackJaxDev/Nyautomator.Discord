@@ -8,7 +8,7 @@ namespace NyautomatorUI.Server.Automation;
 
 /// <summary>
 /// Supplies Discord channel picker options for the currently configured guild.
-/// Option format: channelId|displayName
+/// Option format: displayName :: channelId
 /// </summary>
 public sealed class DiscordChannelOptionsProvider : IStringOptionsProvider
 {
@@ -71,6 +71,6 @@ public sealed class DiscordChannelOptionsProvider : IStringOptionsProvider
         var displayName = channel.TryGetProperty("displayName", out var displayProp) && displayProp.ValueKind == JsonValueKind.String
             ? displayProp.GetString()
             : null;
-        return string.IsNullOrWhiteSpace(displayName) ? id : $"{id}|{displayName!.Trim()}";
+        return string.IsNullOrWhiteSpace(displayName) ? id : $"{displayName!.Trim()} :: {id}";
     }
 }

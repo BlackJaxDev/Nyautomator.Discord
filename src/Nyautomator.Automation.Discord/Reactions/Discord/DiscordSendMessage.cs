@@ -14,12 +14,16 @@ public sealed class DiscordSendMessage : ReactionType, IAsyncReaction
     public override string DisplayName => "Discord: Send Message";
     public override string Description => "Sends a message to a Discord channel.";
 
-    [Description("Message that will be sent to the Discord channel. Supports dynamic values.")]
-    public string Message { get; set; } = string.Empty;
+    [OptionsProvider(typeof(DiscordGuildOptionsProvider))]
+    [Description("Discord server whose channels should be shown in the channel picker.")]
+    public string? GuildId { get; set; }
 
     [OptionsProvider(typeof(DiscordChannelOptionsProvider))]
-    [Description("The Discord channel ID to send the message to.")]
+    [Description("Discord channel that will receive the message.")]
     public string? ChannelId { get; set; }
+
+    [Description("Message that will be sent to the Discord channel. Supports dynamic values.")]
+    public string Message { get; set; } = string.Empty;
 
     public override void Execute()
         => ExecuteAsync().GetAwaiter().GetResult();
