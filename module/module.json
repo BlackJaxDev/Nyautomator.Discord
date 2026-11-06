@@ -88,6 +88,68 @@
         "path": "templates/webhooks-and-http-integrations-discord-webhook-log.json",
         "requiredModuleIds": [ "discord" ],
         "order": 443
+      },
+      {
+        "id": "multi-platform-output-multi-platform-raid-welcome",
+        "label": "Multi-Platform Raid Welcome",
+        "description": "Raid -> Twitch chat welcome -> Discord mods ping with raider count and source.",
+        "category": "Discord",
+        "path": "templates/multi-platform-output-multi-platform-raid-welcome.json",
+        "requiredModuleIds": [
+          "discord"
+        ],
+        "order": 444
+      },
+      {
+        "id": "multi-platform-output-unified-follow-sub-feed",
+        "label": "Unified Follow/Sub Feed",
+        "description": "Twitch + StreamElements events -> shared formatter subgraph -> alert widget + Discord channel post.",
+        "category": "Discord",
+        "path": "templates/multi-platform-output-unified-follow-sub-feed.json",
+        "requiredModuleIds": [
+          "discord",
+          "streamelements"
+        ],
+        "order": 445
+      },
+      {
+        "id": "scheduled-and-timer-based-social-plug-rotation",
+        "label": "Social Plug Rotation",
+        "description": "Interval timer -> cycle through Discord/socials messages -> chat post.",
+        "category": "Discord",
+        "path": "templates/scheduled-and-timer-based-social-plug-rotation.json",
+        "requiredModuleIds": [
+          "discord"
+        ],
+        "order": 446
+      },
+      {
+        "id": "smart-lights-govee-govee-state-monitor",
+        "label": "Govee State Monitor",
+        "description": "Govee.Device.Event (offline/online) -> branch -> dashboard log + optional Discord alert.",
+        "category": "Discord",
+        "path": "templates/smart-lights-govee-govee-state-monitor.json",
+        "requiredModuleIds": [
+          "discord",
+          "govee"
+        ],
+        "order": 447
+      }
+    ],
+    "graphStepPresets": [
+      {
+        "id": "discord-message",
+        "type": "Discord.Channel.SendMessage",
+        "name": "Send Discord Message",
+        "config": {
+          "Message": "",
+          "ChannelId": ""
+        },
+        "messageParam": "Message",
+        "bindings": {
+          "discordChannelId": "ChannelId"
+        },
+        "order": 440
       }
     ],
     "authenticatedIntegrations": [
