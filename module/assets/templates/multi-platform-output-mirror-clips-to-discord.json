@@ -36,15 +36,7 @@
   "steps": [
     "twitch-chat",
     "youtube-chat",
-    {
-      "kind": "discord-message",
-      "nodeKind": "reaction",
-      "type": "Discord.Channel.SendMessage",
-      "name": "Send Discord Message",
-      "config": { "Message": "", "ChannelId": "" },
-      "messageParam": "Message",
-      "bindings": { "discordChannelId": "ChannelId" }
-    },
+    "discord-message",
     "http-post",
     "log"
   ]
