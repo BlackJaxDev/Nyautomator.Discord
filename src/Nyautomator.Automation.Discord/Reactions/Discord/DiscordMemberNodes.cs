@@ -324,65 +324,6 @@ public sealed class DiscordRoleActionOptionsProvider : IStringOptionsProvider
     public IEnumerable<string> GetOptions() => ["add", "remove"];
 }
 
-public sealed class DiscordGuildOptionsProvider : IStringOptionsProvider
-{
-    public IEnumerable<string> GetOptions()
-    {
-        try
-        {
-            var sender = AutomationHost.SendAuthenticatedIntegrationRequest;
-            if (sender is null)
-                return [];
-
-            var response = sender(new AuthenticatedIntegrationRequest(
-                "Discord",
-                "GET",
-                "/guilds",
-                null,
-                null,
-                "application/json",
-                5000), CancellationToken.None).GetAwaiter().GetResult();
-            if (!response.Success || !response.IsSuccess || string.IsNullOrWhiteSpace(response.Body))
-                return [];
-
-            using var document = JsonDocument.Parse(response.Body);
-            if (!document.RootElement.TryGetProperty("guilds", out var guilds) || guilds.ValueKind != JsonValueKind.Array)
-                return [];
-
-            return [.. guilds.EnumerateArray()
-                .Select(ReadGuildOption)
-                .Where(static value => !string.IsNullOrWhiteSpace(value))
-                .Select(static value => value!)
-                .Distinct(StringComparer.OrdinalIgnoreCase)];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Automation][Discord] Failed to enumerate server options: {ex.Message}");
-            return [];
-        }
-    }
-
-    private static string? ReadGuildOption(JsonElement guild)
-    {
-        if (guild.ValueKind != JsonValueKind.Object)
-            return null;
-
-        if (!guild.TryGetProperty("id", out var idProp)
-            || idProp.ValueKind != JsonValueKind.String
-            || string.IsNullOrWhiteSpace(idProp.GetString()))
-        {
-            return null;
-        }
-
-        var id = idProp.GetString()!.Trim();
-        var name = guild.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String
-            ? nameProp.GetString()
-            : null;
-
-        return string.IsNullOrWhiteSpace(name) ? id : $"{id}|{name!.Trim()}";
-    }
-}
-
 public sealed class DiscordRoleOptionsProvider : IStringOptionsProvider
 {
     public IEnumerable<string> GetOptions()
